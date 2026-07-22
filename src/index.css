@@ -1,0 +1,15 @@
+/* Minimal reset only. Real visual design happens in components 11-13
+   (ARCHITECTURE_v1.0.md §11) once there are actual screens to design --
+   intentionally not styled here. */
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
