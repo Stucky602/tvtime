@@ -136,7 +136,7 @@ const server = http.createServer(async (req, res) => {
       { provider_id: 337, provider_name: 'Disney Plus' },
       { provider_id: 15, provider_name: 'Hulu' },
       { provider_id: 1899, provider_name: 'Max' },
-      { provider_id: 350, provider_name: 'Apple TV+' },
+      { provider_id: 350, provider_name: 'Apple TV' },
       { provider_id: 386, provider_name: 'Peacock Premium' },
       { provider_id: 531, provider_name: 'Paramount Plus' },
     ]});
@@ -163,7 +163,13 @@ const server = http.createServer(async (req, res) => {
       && url.searchParams.get('trailer_checked_at') === 'is.null') {
     if (backfillServed) return send(200, []); // terminates once served
     backfillServed = true;
-    return send(200, [{ tmdb_id: 902, media_type: 'movie' }]);
+    // 111 is ALSO returned by Phase A discovery -- this is the exact
+    // overlap that produced "ON CONFLICT DO UPDATE command cannot
+    // affect row a second time" in production.
+    return send(200, [
+      { tmdb_id: 902, media_type: 'movie' },
+      { tmdb_id: 111, media_type: 'movie' },
+    ]);
   }
 
   if (p === '/rest/v1/titles' && req.method === 'GET') {
@@ -217,7 +223,22 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     req.on('data', (chunk) => (body += chunk));
     req.on('end', () => {
-      upserts.push(JSON.parse(body));
+      const rows = JSON.parse(body);
+      const seenPk = new Set();
+      for (const r of rows) {
+        const pk = `${r.tmdb_id}:${r.media_type}`;
+        if (seenPk.has(pk)) {
+          // Mirrors Postgres error 21000.
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            code: '21000',
+            message: 'ON CONFLICT DO UPDATE command cannot affect row a second time',
+          }));
+          return;
+        }
+        seenPk.add(pk);
+      }
+      upserts.push(rows);
       res.writeHead(201, { 'Content-Type': 'application/json' });
       res.end();
     });
@@ -326,6 +347,20 @@ async function main() {
   const noVideos = byId['112:movie'];
   assert(noVideos && noVideos.trailer_key === null,
     'a title with no videos block gets a null key rather than throwing');
+
+  const pkSeen = new Set();
+  let dupeAcrossBatches = false;
+  for (const batch of upserts) {
+    for (const r of batch) {
+      const pk = `${r.tmdb_id}:${r.media_type}`;
+      if (pkSeen.has(pk)) dupeAcrossBatches = true;
+      pkSeen.add(pk);
+    }
+  }
+  assert(!dupeAcrossBatches,
+    'no title is upserted twice, even when discovery and backfill overlap');
+  assert(byId['111:movie'] !== undefined,
+    'the overlapping title is still upserted once');
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`}`);
   process.exit(failures === 0 ? 0 : 1);

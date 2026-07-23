@@ -59,7 +59,7 @@ const PLATFORM_NAMES = {
   disney: ['Disney Plus', 'Disney+'],
   hulu: ['Hulu'],
   max: ['Max', 'HBO Max', 'Max Amazon Channel'],
-  appletv: ['Apple TV+', 'Apple TV Plus', 'Apple TV+ Amazon Channel'],
+  appletv: ['Apple TV+', 'Apple TV Plus', 'Apple TV', 'Apple TV+ Amazon Channel'],
   peacock: ['Peacock Premium', 'Peacock Premium Plus', 'Peacock'],
   paramount: ['Paramount Plus', 'Paramount+', 'Paramount+ Amazon Channel'],
 };
@@ -98,10 +98,34 @@ async function resolveProviderIds() {
 
   const byName = new Map(results.map((r) => [r.provider_name.trim().toLowerCase(), r.provider_id]));
 
+  // Normalised index: lowercase, alphanumerics only. "Apple TV+" and
+  // "Apple TV" both collapse to "appletv", so a cosmetic rebrand (which
+  // is exactly what broke Apple) still resolves.
+  const norm = (n) => n.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const byNorm = new Map();
+  for (const r of results) {
+    const k = norm(r.provider_name);
+    if (!byNorm.has(k)) byNorm.set(k, []);
+    byNorm.get(k).push(r.provider_id);
+  }
+
   for (const [slug, names] of Object.entries(PLATFORM_NAMES)) {
-    const ids = names
+    let ids = names
       .map((n) => byName.get(n.trim().toLowerCase()))
       .filter((id) => id !== undefined);
+
+    if (ids.length === 0) {
+      // Exact match failed -- fall back to the normalised form and say
+      // so, so a rename is visible in the log rather than silent.
+      const viaNorm = names.flatMap((n) => byNorm.get(norm(n)) || []);
+      if (viaNorm.length > 0) {
+        ids = [...new Set(viaNorm)];
+        console.log(
+          `Matched "${slug}" only after normalising punctuation -- TMDB has ` +
+          `likely renamed it. Worth updating PLATFORM_NAMES.`
+        );
+      }
+    }
 
     if (ids.length === 0) {
       console.warn(
@@ -661,7 +685,27 @@ async function main() {
     );
   }
 
-  const allRows = [...discovered, ...refreshed, ...backfilled];
+  // Deduplicate by primary key before upserting.
+  //
+  // The three phases overlap by design: Phase A rediscovers whatever is
+  // popular right now, and Phase C backfills un-checked titles ordered
+  // by popularity -- so they fetch largely the SAME titles. Sending both
+  // copies in one statement makes Postgres reject the whole batch with
+  //   "ON CONFLICT DO UPDATE command cannot affect row a second time"
+  // because a single command cannot update one row twice.
+  //
+  // Last write wins, which is safe here: every row in this run is a
+  // fresh fetch of the same TMDB detail, so the copies are equivalent.
+  const byPk = new Map();
+  for (const row of [...discovered, ...refreshed, ...backfilled]) {
+    byPk.set(`${row.tmdb_id}:${row.media_type}`, row);
+  }
+  const allRows = [...byPk.values()];
+
+  const dupes = discovered.length + refreshed.length + backfilled.length - allRows.length;
+  if (dupes > 0) {
+    console.log(`Deduplicated ${dupes} title(s) fetched by more than one phase.`);
+  }
 
   if (allRows.length === 0) {
     console.warn('Nothing to upsert this run (both phases came back empty).');
