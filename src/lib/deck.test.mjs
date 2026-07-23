@@ -503,6 +503,69 @@ test('empty candidate pool returns an empty deck rather than throwing', () => {
 // Filters (§5.3)
 // ---------------------------------------------------------------------
 
+test('new filters: anime, runtime, rating, service, language, recency', () => {
+  const anime = makeTitle(10, [8], { year: 2019 });
+  anime.original_language = 'ja';
+  const pixar = makeTitle(11, [8], { year: 2019 });
+  pixar.original_language = 'en';
+  const longFilm = makeTitle(12, [3], { year: 2021 });
+  longFilm.runtime = 180;
+  longFilm.original_language = 'en';
+  const shortFilm = makeTitle(13, [3], { year: 2024 });
+  shortFilm.runtime = 85;
+  shortFilm.original_language = 'en';
+  const badlyRated = makeTitle(14, [3], { rating: 4.2, vote_count: 5000, year: 2022 });
+  badlyRated.original_language = 'en';
+  const unrated = makeTitle(15, [3], { rating: 9.9, vote_count: 3, year: 2022 });
+  unrated.original_language = 'en';
+  const all = [anime, pixar, longFilm, shortFilm, badlyRated, unrated];
+  for (const t of all) t.runtime = t.runtime ?? 100;
+
+  // Anime: Animation + Japanese. Pixar is Animation but English.
+  assert.deepEqual(applyFilters(all, { anime: 'only' }).map((t) => t.tmdb_id), [10]);
+  assert.ok(!applyFilters(all, { anime: 'hide' }).some((t) => t.tmdb_id === 10));
+
+  // Runtime cap keeps unknown-runtime titles rather than hiding them.
+  const capped = applyFilters(all, { maxRuntime: 120 }).map((t) => t.tmdb_id);
+  assert.ok(!capped.includes(12), '180 min film excluded');
+  assert.ok(capped.includes(13), '85 min film kept');
+
+  // A low rating from many votes is excluded; a high rating from three
+  // votes is treated as unknown and kept.
+  const rated = applyFilters(all, { minRating: 7 }).map((t) => t.tmdb_id);
+  assert.ok(!rated.includes(14), 'genuinely low-rated excluded');
+  assert.ok(rated.includes(15), 'low-sample rating treated as unknown, not filtered out');
+
+  // Service
+  anime.providers = ['max'];
+  pixar.providers = ['netflix'];
+  assert.deepEqual(
+    applyFilters([anime, pixar], { services: ['max'] }).map((t) => t.tmdb_id),
+    [10]
+  );
+
+  // Language
+  assert.deepEqual(applyFilters(all, { language: 'foreign' }).map((t) => t.tmdb_id), [10]);
+  assert.ok(!applyFilters(all, { language: 'en' }).some((t) => t.tmdb_id === 10));
+
+  // Recency (last 2 years)
+  const recent = applyFilters(all, { newOnly: true }).map((t) => t.tmdb_id);
+  assert.ok(recent.includes(13), '2024 title kept');
+  assert.ok(!recent.includes(10), '2019 title excluded');
+});
+
+test('filters intersect rather than union', () => {
+  const a = makeTitle(20, [2], { year: 2023 });
+  a.original_language = 'en'; a.runtime = 95; a.providers = ['netflix'];
+  const b = makeTitle(21, [2], { year: 2023 });
+  b.original_language = 'en'; b.runtime = 200; b.providers = ['netflix'];
+  // Comedy AND short -> only a
+  assert.deepEqual(
+    applyFilters([a, b], { genres: [2], maxRuntime: 120 }).map((t) => t.tmdb_id),
+    [20]
+  );
+});
+
 test('filters mask by type, genre, and decade; no filters is a passthrough', () => {
   const cards = [
     makeTitle(1, [GENRE.HORROR], { year: 1995 }),

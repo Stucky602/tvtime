@@ -65,7 +65,7 @@ import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } fro
 // the instantaneous flick is what the user actually did.
 const VELOCITY_WINDOW_MS = 80;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhausted, devMode }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -178,11 +178,13 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
     if (res?.status === 'OK') {
       setIndex((i) => Math.max(0, i - 1));
       setMatch(false);
+      // Un-record it, or the card would vanish on the next remount.
+      onCardUndone?.(title);
     }
     // On EXPIRED there is deliberately no message: the button is already
     // gone by then in normal use, and explaining a race the user did not
     // perceive is noise.
-  }, [undoable]);
+  }, [undoable, onCardUndone]);
 
   // ---- pointer drag ----
 

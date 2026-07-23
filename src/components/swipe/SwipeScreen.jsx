@@ -1,14 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import SwipeDeck from './SwipeDeck.jsx';
 import FilterPanel from './FilterPanel.jsx';
-import { buildAndCacheDeck, loadCachedDeck, flushSwipeQueue, queuedSwipeCount } from '../../lib/data.js';
+import {
+  buildAndCacheDeck,
+  loadCachedDeck,
+  flushSwipeQueue,
+  queuedSwipeCount,
+  loadSwipedKeys,
+  addSwipedKey,
+  removeSwipedKey,
+} from '../../lib/data.js';
 import { applyFilters } from '../../lib/deck.js';
 import { CONFIG } from '../../lib/config.js';
+import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §5.1 (session caching), §5.3
 // (filters mask, never re-query), §6 (offline queue), §9 (waiting state)
 
-const EMPTY_FILTERS = { mediaType: null, genres: [], decades: [] };
+const EMPTY_FILTERS = EMPTY;
 
 export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings }) {
   const [deck, setDeck] = useState(null);
@@ -18,6 +27,13 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
   const [pendingSync, setPendingSync] = useState(0);
   const [loadError, setLoadError] = useState(null);
 
+  // Captured ONCE per mount. Cards swiped in previous visits to this tab
+  // are filtered out here so the deck resumes where it left off; cards
+  // swiped during THIS visit are handled by SwipeDeck's own index, so
+  // this set deliberately does not update mid-session (that would make
+  // the list shift under the index and skip cards).
+  const swipedAtMount = useRef(new Set());
+
   useEffect(() => {
     let cancelled = false;
 
@@ -25,6 +41,7 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
       setLoading(true);
       setLoadError(null);
       try {
+        swipedAtMount.current = loadSwipedKeys(room.id, user.id);
         const cached = loadCachedDeck(room.id, user.id);
         if (cached) {
           if (!cancelled) {
@@ -77,13 +94,14 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
     };
   }, []);
 
-  const hasFilters = Boolean(
-    filters.mediaType || filters.genres.length || filters.decades.length
-  );
+  const hasFilters = hasActiveFilters(filters);
 
   const filteredCards = useMemo(() => {
     if (!deck) return [];
-    return hasFilters ? applyFilters(deck.cards, filters) : deck.cards;
+    const unswiped = deck.cards.filter(
+      (c) => !swipedAtMount.current.has(`${c.tmdb_id}:${c.media_type}`)
+    );
+    return hasFilters ? applyFilters(unswiped, filters) : unswiped;
   }, [deck, filters, hasFilters]);
 
   if (loading) {
@@ -149,6 +167,8 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           cards={filteredCards}
           debugByKey={deck?.debugByKey}
           devMode={devMode}
+          onCardResolved={(t) => addSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
+          onCardUndone={(t) => removeSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onExhausted={() => {}}
         />
       )}
@@ -158,7 +178,8 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
         filters={filters}
         onChange={setFilters}
         onClose={() => setFilterOpen(false)}
-        allCards={deck?.cards || []}
+        allCards={filteredCards}
+        roomPlatforms={room.platforms}
       />
     </div>
   );

@@ -301,20 +301,76 @@ export function buildDeck({
 
 /**
  * §5.3: filters MASK the built deck client-side rather than re-querying.
- * All off by default. Type, genre, decade.
+ * All off by default.
+ *
+ * Nine dimensions now. Every one of them intersects (AND), never
+ * unions -- "Comedy + under 90 min" means comedy AND short, which is
+ * what someone deciding what to watch tonight actually means.
  */
 export function applyFilters(cards, filters) {
   if (!filters) return cards;
   return cards.filter((t) => {
+    // --- Type ---
     if (filters.mediaType && t.media_type !== filters.mediaType) return false;
+
+    // --- Genre ---
     if (filters.genres?.length) {
       if (!(t.genres || []).some((g) => filters.genres.includes(g))) return false;
     }
+
+    // --- Decade ---
     if (filters.decades?.length) {
       if (!t.year) return false;
       const decade = Math.floor(t.year / 10) * 10;
       if (!filters.decades.includes(decade)) return false;
     }
+
+    // --- Anime ---
+    // TMDB has no "anime" genre. The standard proxy, and the one
+    // JustWatch/TMDB users land on, is Animation + Japanese original
+    // language -- which correctly keeps Studio Ghibli and Demon Slayer
+    // while excluding Pixar and Bluey. It is a proxy, so it will miss
+    // the occasional co-production listed under another language.
+    if (filters.anime === 'only' || filters.anime === 'hide') {
+      const isAnime = (t.genres || []).includes(ANIME_GENRE_ID) && t.original_language === 'ja';
+      if (filters.anime === 'only' && !isAnime) return false;
+      if (filters.anime === 'hide' && isAnime) return false;
+    }
+
+    // --- Runtime cap ---
+    // Titles with unknown runtime are KEPT rather than dropped. TV
+    // episode_run_time is frequently missing (§4.3), and silently
+    // hiding every show with no runtime would gut the TV side of the
+    // deck for a filter the user thinks only affects length.
+    if (filters.maxRuntime && t.runtime && t.runtime > filters.maxRuntime) return false;
+
+    // --- Minimum rating ---
+    // Same reasoning: an unrated title is unknown, not bad. But a
+    // rating from a handful of votes is noise, so it is treated as
+    // unknown rather than trusted.
+    if (filters.minRating) {
+      const trustworthy = (t.vote_count ?? 0) >= 100;
+      if (trustworthy && (t.rating ?? 0) < filters.minRating) return false;
+    }
+
+    // --- Streaming service ---
+    if (filters.services?.length) {
+      if (!(t.providers || []).some((p) => filters.services.includes(p))) return false;
+    }
+
+    // --- Language ---
+    if (filters.language === 'en' && t.original_language !== 'en') return false;
+    if (filters.language === 'foreign' && t.original_language === 'en') return false;
+
+    // --- Recent only ---
+    if (filters.newOnly) {
+      const cutoff = new Date().getFullYear() - 2;
+      if (!t.year || t.year < cutoff) return false;
+    }
+
     return true;
   });
 }
+
+/** Canonical Animation genre id, from component 4's mapping table. */
+const ANIME_GENRE_ID = 8;

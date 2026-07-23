@@ -577,3 +577,12 @@
   grid-template-columns: 1fr 2fr;
   gap: 10px;
 }
+
+.filter-count {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pop-cyan);
+}

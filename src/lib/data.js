@@ -45,7 +45,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   let query = supabase
     .from('titles')
     .select(
-      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality'
+      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language'
     )
     .eq('excluded', false)
     .order('popularity', { ascending: false })
@@ -137,9 +137,79 @@ export function saveCachedDeck(roomId, userId, deck, position) {
   }
 }
 
+// ---------------------------------------------------------------------
+// Swiped-key tracking
+// ---------------------------------------------------------------------
+//
+// Fixes: leaving the Swipe tab and coming back restarted the deck from
+// the first card, so you re-swiped titles you'd already voted on.
+//
+// The cause was that the deck's position lived in SwipeDeck's local
+// component state. App.jsx renders the swipe screen conditionally
+// (`{tab === 'swipe' && <SwipeScreen/>}`), so switching tabs unmounts
+// the whole subtree and destroys that state; coming back remounted at
+// index 0 with the same cached cards.
+//
+// Persisting an index would have worked but is brittle -- it means
+// something different the moment filters change the visible list.
+// Recording WHICH titles have been swiped is stable under any
+// reordering or filtering, and it also covers the case where a swipe
+// is still sitting in the offline queue and therefore isn't excluded
+// by the server-side query yet.
+//
+// sessionStorage, matching the deck cache: this is position within the
+// current deck, and a fresh session rebuilds from the database anyway.
+const SWIPED_KEY = 'flixpix.swiped.v1';
+
+export function loadSwipedKeys(roomId, userId) {
+  try {
+    const raw = sessionStorage.getItem(SWIPED_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (parsed.roomId !== roomId || parsed.userId !== userId) return new Set();
+    return new Set(parsed.keys || []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistSwipedKeys(roomId, userId, set) {
+  try {
+    sessionStorage.setItem(
+      SWIPED_KEY,
+      JSON.stringify({ roomId, userId, keys: [...set] })
+    );
+  } catch {
+    /* quota: worst case the deck restarts, i.e. the old behaviour */
+  }
+}
+
+export function addSwipedKey(roomId, userId, key) {
+  const set = loadSwipedKeys(roomId, userId);
+  set.add(key);
+  persistSwipedKeys(roomId, userId, set);
+}
+
+export function removeSwipedKey(roomId, userId, key) {
+  const set = loadSwipedKeys(roomId, userId);
+  set.delete(key);
+  persistSwipedKeys(roomId, userId, set);
+}
+
+export function clearSwipedKeys() {
+  try {
+    sessionStorage.removeItem(SWIPED_KEY);
+  } catch {
+    /* no-op */
+  }
+}
+
 export function clearCachedDeck() {
   try {
     sessionStorage.removeItem(DECK_KEY);
+    // Must go together: a fresh deck filtered by a stale swiped-list
+    // would silently hide titles it just legitimately fetched.
+    sessionStorage.removeItem(SWIPED_KEY);
   } catch {
     /* no-op */
   }
