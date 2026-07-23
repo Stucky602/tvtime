@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import SwipeCard from './SwipeCard.jsx';
 import { CONFIG } from '../../lib/config.js';
 import { submitSwipe, undoSwipe } from '../../lib/data.js';
+import { hapticThreshold, hapticCommit, hapticUndo, hapticMatch } from '../../lib/haptics.js';
+import { classifyGesture, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §6 (whole section), §5.3, §9
 //
@@ -22,9 +24,46 @@ import { submitSwipe, undoSwipe } from '../../lib/data.js';
 // Pointer Events rather than touch events: one code path covers touch,
 // mouse, and stylus, and setPointerCapture means a drag that leaves the
 // element still tracks correctly.
+//
+// ---------------------------------------------------------------------
+// UPDATE 1: gesture sensitivity rework
+// ---------------------------------------------------------------------
+// Reported symptom: "barely touching the screen" cast a vote. The cause
+// was the commit test:
+//
+//     const committed = Math.abs(dx) > COMMIT_PX || velocity > FLING_VELOCITY;
+//     if (committed && Math.abs(dx) > 30) { ... }
+//
+// The fling arm only required 30px of travel, and velocity was computed
+// over the whole gesture with a 1ms floor -- so a 31px twitch in 60ms
+// scored 0.52 px/ms and cleared the 0.45 threshold. Putting a thumb
+// down with any drift, or starting a vertical scroll, voted on a title
+// permanently. Four changes:
+//
+//   1. DEAD ZONE. The card does not move at all until the finger has
+//      travelled past SWIPE_DEAD_ZONE_PX. Below that it is a tap, not a
+//      drag, and taps must never vote.
+//   2. DIRECTION LOCK. Horizontal travel has to beat vertical by
+//      SWIPE_DIRECTION_LOCK before the gesture is treated as a swipe at
+//      all, and a clearly-vertical gesture aborts outright. A scroll can
+//      no longer bleed into a vote.
+//   3. THRESHOLD SCALES WITH THE CARD. 30% of card width rather than a
+//      fixed pixel count, so it feels identical on a small phone and a
+//      tablet, with a floor for very narrow screens.
+//   4. FLING NEEDS REAL TRAVEL. A flick still commits early, but only
+//      after SWIPE_FLING_MIN_PX (90px), and velocity is now measured
+//      over the last ~80ms of movement rather than the whole gesture --
+//      so a slow drag that ends with a tiny jerk no longer reads as a
+//      fling.
+//
+// Net effect: a deliberate swipe feels the same, and an accidental one
+// is close to impossible.
 
-const COMMIT_PX = 110; // horizontal travel that commits a swipe
-const FLING_VELOCITY = 0.45; // px/ms -- a fast flick commits at shorter distance
+// Velocity is sampled over a trailing window rather than the full
+// gesture. Total-elapsed velocity is wrong for this: drag slowly for a
+// second, twitch 5px at the end, and the average is meaningless while
+// the instantaneous flick is what the user actually did.
+const VELOCITY_WINDOW_MS = 80;
 
 export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhausted, devMode }) {
   const [index, setIndex] = useState(0);
@@ -33,12 +72,36 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
   const [match, setMatch] = useState(false);
   const [undoable, setUndoable] = useState(null);
   const [queuedNotice, setQueuedNotice] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  const pointerRef = useRef({ id: null, startX: 0, startY: 0, startT: 0 });
+  const stackRef = useRef(null);
   const undoTimer = useRef(null);
+  const crossedThreshold = useRef(false);
+
+  // Full gesture state. A ref rather than state because it updates on
+  // every pointermove and must not trigger a re-render on its own.
+  const gesture = useRef({
+    id: null,
+    startX: 0,
+    startY: 0,
+    startT: 0,
+    // 'pending'  -- touching, but not yet established as a swipe
+    // 'dragging' -- confirmed horizontal drag, card follows the finger
+    // 'aborted'  -- clearly vertical, ignore until release
+    phase: 'idle',
+    sampleX: 0,
+    sampleT: 0,
+  });
 
   const current = cards[index];
   const next = cards[index + 1];
+
+  // Collapse an expanded synopsis whenever the card changes -- carrying
+  // the expanded state onto the next title would hide its poster for no
+  // reason.
+  useEffect(() => {
+    setExpanded(false);
+  }, [index]);
 
   useEffect(() => {
     if (!current && cards.length > 0) onExhausted?.();
@@ -46,10 +109,15 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
 
   useEffect(() => () => clearTimeout(undoTimer.current), []);
 
+  /** Card width drives the commit threshold (see lib/gesture.js). */
+  const cardWidth = useCallback(() => stackRef.current?.offsetWidth || 360, []);
+
   const commit = useCallback(
     async (direction) => {
       const title = cards[index];
       if (!title) return;
+
+      hapticCommit();
 
       // Card animates out first, unconditionally. The write follows.
       setLeaving(direction);
@@ -70,6 +138,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
       }
 
       if (result.is_new_match) {
+        hapticMatch();
         setMatch(true);
         setTimeout(() => setMatch(false), CONFIG.MATCH_INDICATOR_MS);
       }
@@ -96,6 +165,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
     const { title } = undoable;
     setUndoable(null);
     clearTimeout(undoTimer.current);
+    hapticUndo();
 
     const res = await undoSwipe({
       tmdb_id: title.tmdb_id,
@@ -114,38 +184,83 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
 
   const onPointerDown = (e) => {
     if (leaving) return;
-    pointerRef.current = {
+    gesture.current = {
       id: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       startT: performance.now(),
+      phase: 'pending',
+      sampleX: e.clientX,
+      sampleT: performance.now(),
     };
+    crossedThreshold.current = false;
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDrag({ dx: 0, dy: 0, active: true });
   };
 
   const onPointerMove = (e) => {
-    if (pointerRef.current.id !== e.pointerId || !drag.active) return;
-    const dx = e.clientX - pointerRef.current.startX;
+    const g = gesture.current;
+    if (g.id !== e.pointerId || g.phase === 'idle' || g.phase === 'aborted') return;
+
+    const rawDx = e.clientX - g.startX;
+    const rawDy = e.clientY - g.startY;
+
+    if (g.phase === 'pending') {
+      // Dead zone + direction lock, both in lib/gesture.js so they can
+      // be tested against the real reported scenario. 'pending' means
+      // the card does NOT move -- no visual response at all to a touch
+      // that hasn't committed to being a drag.
+      const phase = classifyGesture(rawDx, rawDy);
+      if (phase === 'pending') return;
+      g.phase = phase; // 'dragging' or 'aborted'
+      if (phase === 'aborted') return;
+    }
+
+    // Trailing-window velocity sample.
+    const now = performance.now();
+    if (now - g.sampleT > VELOCITY_WINDOW_MS) {
+      g.sampleX = e.clientX;
+      g.sampleT = now;
+    }
+
     // Vertical travel is damped hard: this is a horizontal gesture, and
     // letting the card follow a finger vertically makes it feel loose.
-    const dy = (e.clientY - pointerRef.current.startY) * 0.25;
-    setDrag({ dx, dy, active: true });
+    const dy = rawDy * 0.25;
+
+    // One light tick the moment the card passes the commit threshold, so
+    // you can feel where the line is without watching the screen.
+    const past = Math.abs(rawDx) > commitDistance(cardWidth());
+    if (past && !crossedThreshold.current) {
+      crossedThreshold.current = true;
+      hapticThreshold();
+    } else if (!past && crossedThreshold.current) {
+      crossedThreshold.current = false;
+    }
+
+    setDrag({ dx: rawDx, dy, active: true });
   };
 
   const onPointerUp = (e) => {
-    if (pointerRef.current.id !== e.pointerId) return;
-    const dx = e.clientX - pointerRef.current.startX;
-    const elapsed = Math.max(1, performance.now() - pointerRef.current.startT);
-    const velocity = Math.abs(dx) / elapsed;
+    const g = gesture.current;
+    if (g.id !== e.pointerId) return;
 
-    pointerRef.current.id = null;
+    const wasDragging = g.phase === 'dragging';
+    const dx = e.clientX - g.startX;
 
-    // A short fast flick should commit as readily as a long slow drag --
-    // matching either alone feels unresponsive in the other case.
-    const committed = Math.abs(dx) > COMMIT_PX || velocity > FLING_VELOCITY;
-    if (committed && Math.abs(dx) > 30) {
-      commit(dx > 0 ? 'right' : 'left');
+    // Velocity over the trailing window, not the whole gesture.
+    const elapsed = Math.max(16, performance.now() - g.sampleT);
+    const velocity = Math.abs(e.clientX - g.sampleX) / elapsed;
+
+    gesture.current = { ...g, id: null, phase: 'idle' };
+    crossedThreshold.current = false;
+
+    if (!wasDragging) {
+      // Tap, or an aborted vertical gesture. Never votes.
+      setDrag({ dx: 0, dy: 0, active: false });
+      return;
+    }
+
+    if (shouldCommit({ dx, velocity, cardWidth: cardWidth(), phase: 'dragging' })) {
+      commit(swipeDirection(dx));
     } else {
       setDrag({ dx: 0, dy: 0, active: false });
     }
@@ -177,10 +292,11 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
   }
 
   const dx = leaving ? (leaving === 'right' ? 600 : -600) : drag.dx;
+  const remaining = cards.length - index;
 
   return (
     <div className="deck">
-      <div className="deck__stack">
+      <div className="deck__stack" ref={stackRef}>
         {next && <SwipeCard title={next} isNext dx={drag.dx} />}
         <div
           className="deck__hit"
@@ -194,6 +310,8 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
             dx={dx}
             dy={leaving ? 0 : drag.dy}
             dragging={drag.active}
+            expanded={expanded}
+            onToggleExpand={() => setExpanded((v) => !v)}
           />
         </div>
 
@@ -238,6 +356,12 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
           Yes
         </button>
       </div>
+
+      {/* Update 5: how much is left, so an empty deck is never a surprise. */}
+      <p className="deck__progress">
+        {remaining} {remaining === 1 ? 'title' : 'titles'} left
+        {undoable && <span className="deck__undohint"> · undo available</span>}
+      </p>
 
       {queuedNotice && (
         <p className="notice" role="status">

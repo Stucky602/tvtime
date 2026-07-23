@@ -13,8 +13,23 @@ import { posterUrl } from '../../lib/config.js';
 // left. It's readable peripherally, which matters because the actual use
 // case is two people half-watching their own screens while talking to
 // each other.
+//
+// Update 3: the synopsis is now expandable. Previously the meta block
+// was capped at 38% of card height with `overflow-y: auto`, so a long
+// synopsis became a tiny internal scroll area that fought the swipe
+// gesture for the same touch. Now it clamps to three lines with a
+// "More" affordance, and expanding it grows the panel over the poster
+// instead of introducing a nested scroller.
 
-export default function SwipeCard({ title, dx = 0, dy = 0, dragging = false, isNext = false }) {
+export default function SwipeCard({
+  title,
+  dx = 0,
+  dy = 0,
+  dragging = false,
+  isNext = false,
+  expanded = false,
+  onToggleExpand,
+}) {
   const [posterFailed, setPosterFailed] = useState(false);
   const poster = posterUrl(title.poster_path);
 
@@ -44,6 +59,8 @@ export default function SwipeCard({ title, dx = 0, dy = 0, dragging = false, isN
   // null. An em dash reads better than "0 min".
   const runtime = title.runtime ? `${title.runtime} min` : null;
   const rating = title.vote_count >= 100 && title.rating ? title.rating.toFixed(1) : null;
+
+  const hasLongSynopsis = (title.synopsis || '').length > 150;
 
   return (
     <article
@@ -88,7 +105,7 @@ export default function SwipeCard({ title, dx = 0, dy = 0, dragging = false, isN
         )}
       </div>
 
-      <div className="card__meta">
+      <div className={`card__meta ${expanded ? 'card__meta--expanded' : ''}`}>
         <h2 className="card__title">{title.title}</h2>
         <p className="card__facts">
           {[
@@ -100,7 +117,25 @@ export default function SwipeCard({ title, dx = 0, dy = 0, dragging = false, isN
             .filter(Boolean)
             .join(' · ')}
         </p>
-        {title.synopsis && <p className="card__synopsis">{title.synopsis}</p>}
+        {title.synopsis && (
+          <p className={`card__synopsis ${expanded ? '' : 'card__synopsis--clamped'}`}>
+            {title.synopsis}
+          </p>
+        )}
+        {!isNext && hasLongSynopsis && (
+          <button
+            className="card__more"
+            // Pointer events on the deck handle dragging; stop this tap
+            // from also being read as the start of a swipe.
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand?.();
+            }}
+          >
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
         {title.providers?.length > 0 && (
           <ul className="card__providers">
             {title.providers.map((p) => (

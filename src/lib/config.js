@@ -41,9 +41,29 @@ export const CONFIG = {
   RECENCY_DECAY_YEARS: 10,
 
   // ---- Interaction (§6) ----
-  UNDO_WINDOW_SECONDS: 5,
+  UNDO_WINDOW_SECONDS: 12,
   VERDICT_TOAST_SECONDS: 4,
   MATCH_INDICATOR_MS: 1600,
+
+  // ---- Swipe gesture tuning (update 1) ----
+  // The originals here were far too loose in the hand: COMMIT_PX 110 was
+  // fine on its own, but it was OR'd with a 0.45 px/ms fling check that
+  // only required 30px of travel. A 31px twitch over 60ms is 0.52 px/ms,
+  // so any quick tap with a little drift -- scrolling, or just putting a
+  // thumb down -- registered as a full vote. On a 390px phone that's 8%
+  // of the screen width committing an irreversible swipe.
+  //
+  // Now: distance scales with the card so it feels the same on any
+  // screen, a fling still works but has to actually travel, and there's
+  // a dead zone plus a direction lock so the card doesn't even begin to
+  // follow a finger until the gesture is clearly a horizontal drag.
+  SWIPE_COMMIT_RATIO: 0.30,       // of card width; the primary threshold
+  SWIPE_COMMIT_MIN_PX: 115,       // floor, for very narrow screens
+  SWIPE_FLING_VELOCITY: 0.95,     // px/ms -- roughly double the old value
+  SWIPE_FLING_MIN_PX: 90,         // a fling must still cover real ground
+  SWIPE_DEAD_ZONE_PX: 16,         // card doesn't move at all below this
+  SWIPE_DIRECTION_LOCK: 1.25,     // |dx| must beat |dy| by this to count
+  SWIPE_VERTICAL_ABORT_PX: 55,    // clearly a scroll -> cancel the swipe
 };
 
 // §1: the four platforms, and the canonical genre vocabulary from

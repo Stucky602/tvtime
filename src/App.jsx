@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 import Onboarding from './components/onboarding/Onboarding.jsx';
 import SwipeScreen from './components/swipe/SwipeScreen.jsx';
+import Settings from './components/settings/Settings.jsx';
 import { TogetherTab, SoloTab, PendingTab } from './components/tabs/TabPages.jsx';
 import TabBar from './components/tabs/TabBar.jsx';
 import { ensureSession, isConfigured } from './lib/supabase.js';
 import { getMyRoomState } from './lib/room.js';
+import { rpc } from './lib/supabase.js';
 import './components/swipe/swipe.css';
 import './components/tabs/tabs.css';
 import './components/onboarding/onboarding.css';
+import './components/settings/settings.css';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §6.5 ("no router. Four tabs and
 // a join screen need React state, not a router"), §7 (session bootstrap)
@@ -23,6 +26,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [roomState, setRoomState] = useState(null);
   const [tab, setTab] = useState('swipe');
+  const [showSettings, setShowSettings] = useState(false);
   const [devMode, setDevMode] = useState(false);
 
   useEffect(() => {
@@ -49,6 +53,20 @@ export default function App() {
       }
     })();
   }, []);
+
+  // §7 / §6.5: keep last_seen_at fresh so the reclaim idle check means
+  // something, riding on the focus poll the app already does.
+  useEffect(() => {
+    if (!session) return;
+    const touch = () => {
+      rpc('touch_session').catch(() => {
+        /* best-effort; never surface this */
+      });
+    };
+    touch();
+    window.addEventListener('focus', touch);
+    return () => window.removeEventListener('focus', touch);
+  }, [session]);
 
   const refreshRoomState = async () => {
     if (!session) return;
@@ -81,8 +99,8 @@ export default function App() {
   // shell, skipping genre picks permanently -- there's no "resume
   // onboarding" state, only "has a room or doesn't." Narrow enough
   // (a reload in a ~10-second window) that it's not worth a persisted
-  // onboarding-progress flag yet; worth fixing if it turns out to
-  // matter in practice.
+  // onboarding-progress flag yet; genres are editable in Settings now,
+  // which softens it further.
 
   if (!roomState?.room) {
     return (
@@ -94,10 +112,36 @@ export default function App() {
 
   const { room, user, partner } = roomState;
 
+  if (showSettings) {
+    return (
+      <div className="app">
+        <Settings
+          room={room}
+          user={user}
+          partner={partner}
+          onClose={async () => {
+            setShowSettings(false);
+            await refreshRoomState();
+          }}
+          onRoomLeft={async () => {
+            setShowSettings(false);
+            await refreshRoomState();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       {tab === 'swipe' && (
-        <SwipeScreen room={room} user={user} partner={partner} devMode={devMode} />
+        <SwipeScreen
+          room={room}
+          user={user}
+          partner={partner}
+          devMode={devMode}
+          onOpenSettings={() => setShowSettings(true)}
+        />
       )}
       {tab === 'together' && <TogetherTab roomId={room.id} />}
       {tab === 'solo' && <SoloTab roomId={room.id} />}
