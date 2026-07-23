@@ -1,5 +1,5 @@
 {
-  "name": "couples-swipe-app",
+  "name": "tvtime",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

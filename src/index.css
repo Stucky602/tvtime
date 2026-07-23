@@ -1,15 +1,110 @@
-/* Minimal reset only. Real visual design happens in components 11-13
-   (ARCHITECTURE_v1.0.md §11) once there are actual screens to design --
-   intentionally not styled here. */
+/* Architecture ref: ARCHITECTURE_v1.0.md §6 (gestures, fallbacks), §9
+ *
+ * DESIGN DIRECTION
+ *
+ * The poster is the content. TMDB artwork is dense, saturated, and wildly
+ * inconsistent between titles -- any decorative palette the interface adds
+ * competes with it and loses. So the chrome recedes almost entirely and the
+ * posters carry all the color in the app.
+ *
+ * Ground is a deep blue-black, the color of a room with the TV on and the
+ * lights off. The single accent is a warm amber pulled from a dimmed lamp,
+ * and it appears in exactly two places: the "yes" verdict and the active tab.
+ * Everything else is greyscale.
+ *
+ * The two verdicts are colour-coded so they read peripherally -- amber for
+ * yes, cold slate for no -- because someone half-watching their own screen
+ * while talking to their partner should be able to swipe without looking
+ * directly at a label.
+ *
+ * Type: a condensed grotesque for titles, echoing the vertical compression
+ * of a poster's own credit block, against a plain system stack for body. No
+ * webfont download -- this is a PWA people open for thirty seconds at a
+ * time, and a font swap flash costs more than the character gains.
+ */
+
 :root {
-  color-scheme: light dark;
+  /* Ground and surfaces */
+  --ink: #0a0c10;
+  --ink-raised: #14171e;
+  --ink-edge: #232833;
+
+  /* Type */
+  --text: #f2f4f8;
+  --text-dim: #98a0b0;
+  --text-faint: #5d6472;
+
+  /* The two verdicts */
+  --yes: #f0a949;
+  --yes-glow: rgba(240, 169, 73, 0.55);
+  --no: #7d90a8;
+  --no-glow: rgba(125, 144, 168, 0.45);
+
+  /* Feedback */
+  --match: #f5c26b;
+
+  --radius-card: 18px;
+  --radius-control: 12px;
+
+  --font-display: ui-sans-serif, "SF Compact Display", "Roboto Condensed",
+    "Helvetica Neue", system-ui, sans-serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --tap: 48px; /* minimum touch target */
+
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-body);
+  /* Swipe gestures and pull-to-refresh fight each other on mobile. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Visible keyboard focus everywhere -- gestures are the primary input,
+   but section 6 requires every action to have a reachable button equivalent. */
+:focus-visible {
+  outline: 2px solid var(--yes);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,0 +1,445 @@
+/* Architecture ref: ARCHITECTURE_v1.0.md §6
+ *
+ * Styles for the swipe deck. Scoped with a `deck`/`card` prefix rather
+ * than element selectors, to avoid the specificity collisions the
+ * frontend-design skill warns about between type- and element-based
+ * rules.
+ */
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 20px;
+  gap: 14px;
+}
+
+.deck__stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: stretch;
+}
+
+/* The next card sits behind the top one so the stack reads as depth. */
+.deck__stack > .card--next {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+}
+
+.deck__hit {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  /* Stops the browser claiming the horizontal gesture for scrolling. */
+  touch-action: pan-y;
+  user-select: none;
+}
+
+/* ---- Card ---- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--ink-raised);
+  border: 1px solid var(--ink-edge);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  will-change: transform;
+}
+
+.card__art {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: #000;
+}
+
+.card__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* §4.3: poster_path is frequently null. The title lives in the meta
+   block below, so the placeholder shows medium + year rather than
+   echoing the name. */
+.card__noart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  padding: 28px;
+  background: linear-gradient(160deg, #171b23, #0d1015);
+}
+
+.card__noart-mark {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.card__noart-year {
+  font-family: var(--font-display);
+  font-size: 54px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--ink-edge);
+  line-height: 1;
+}
+
+.card__noart-note {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* The signature element: a light leak along the leading edge as you
+   drag. Amber for yes, cold slate for pass -- readable peripherally, so
+   you can swipe without looking straight at a label. */
+.card__leak {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 90ms linear;
+}
+
+.card__leak--yes {
+  background: linear-gradient(
+    270deg,
+    var(--yes-glow) 0%,
+    rgba(240, 169, 73, 0.12) 22%,
+    transparent 48%
+  );
+  box-shadow: inset -3px 0 24px -6px var(--yes);
+}
+
+.card__leak--no {
+  background: linear-gradient(
+    90deg,
+    var(--no-glow) 0%,
+    rgba(125, 144, 168, 0.1) 22%,
+    transparent 48%
+  );
+  box-shadow: inset 3px 0 24px -6px var(--no);
+}
+
+.card__verdict {
+  position: absolute;
+  top: 20px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 7px 13px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.card__verdict--yes {
+  right: 18px;
+  color: var(--ink);
+  background: var(--yes);
+}
+
+.card__verdict--no {
+  left: 18px;
+  color: var(--ink);
+  background: var(--no);
+}
+
+.card__meta {
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--ink-edge);
+  background: var(--ink-raised);
+  max-height: 38%;
+  overflow-y: auto;
+}
+
+.card__title {
+  margin: 0 0 5px;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.card__facts {
+  margin: 0 0 9px;
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+}
+
+.card__synopsis {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.card__providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card__providers li {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--ink-edge);
+  border-radius: 5px;
+  padding: 3px 8px;
+}
+
+/* ---- Match indicator (§6: transient, then gone) ---- */
+
+.match {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+  background: rgba(10, 12, 16, 0.55);
+  backdrop-filter: blur(2px);
+  animation: match-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.match__word {
+  font-family: var(--font-display);
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--match);
+}
+
+.match__sub {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+@keyframes match-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---- Controls (§6: button equivalent for every gesture) ---- */
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.ctl {
+  min-height: var(--tap);
+  border-radius: var(--radius-control);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid var(--ink-edge);
+  background: var(--ink-raised);
+  transition: transform 90ms ease, border-color 140ms ease;
+}
+
+.ctl:active {
+  transform: scale(0.97);
+}
+
+.ctl--yes {
+  color: var(--yes);
+  border-color: rgba(240, 169, 73, 0.4);
+}
+
+.ctl--no {
+  color: var(--no);
+  border-color: rgba(125, 144, 168, 0.32);
+}
+
+.ctl--undo {
+  padding-inline: 16px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.ctl--undo:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+/* ---- States ---- */
+
+.deck--empty {
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 28px;
+}
+
+.empty__head {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.empty__body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  max-width: 32ch;
+  margin-inline: auto;
+}
+
+.notice {
+  margin: 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+/* Dev-only score readout (§13: the tuning tool, in place of a
+   simulation harness). */
+.devscore {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-faint);
+  background: rgba(10, 12, 16, 0.82);
+  border: 1px solid var(--ink-edge);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* ---- Filter panel (§5.3) ---- */
+
+.filter-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--ink-raised);
+  border-top: 1px solid var(--ink-edge);
+  border-radius: 20px 20px 0 0;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.filter-sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.filter-sheet__head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 19px;
+}
+
+.filter-sheet__head button {
+  color: var(--yes);
+  font-weight: 600;
+  font-size: 14px;
+  min-height: var(--tap);
+}
+
+.filter-group {
+  margin-bottom: 16px;
+}
+
+.filter-group h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-row--wrap {
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--ink-edge);
+  background: var(--ink);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.filter-chip--on {
+  color: var(--ink);
+  background: var(--yes);
+  border-color: var(--yes);
+}
+
+.filter-warning {
+  font-size: 13px;
+  color: var(--no);
+  margin: 0 0 14px;
+}
+
+.filter-sheet__actions {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+}
+
+.filter-toggle {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px solid var(--ink-edge);
+  border-radius: 999px;
+  align-self: center;
+}

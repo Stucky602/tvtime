@@ -1,0 +1,150 @@
+/* Architecture ref: ARCHITECTURE_v1.0.md §7, §5.4 (genre onboarding) */
+
+.onboarding {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.onboard-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px 22px;
+  overflow-y: auto;
+}
+
+.onboard-back {
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 6px 0;
+}
+
+.onboard-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.onboard-sub {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.onboard-btn {
+  min-height: var(--tap);
+  border: 1px solid var(--ink-edge);
+  background: var(--ink-raised);
+  border-radius: var(--radius-control);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+  text-align: center;
+}
+
+.onboard-btn--primary {
+  color: var(--ink);
+  background: var(--yes);
+  border-color: var(--yes);
+}
+
+.onboard-btn:disabled {
+  opacity: 0.4;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.field input {
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--ink-edge);
+  background: var(--ink-raised);
+  color: var(--text);
+  font-size: 16px; /* prevents iOS auto-zoom on focus */
+}
+
+fieldset.field {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+fieldset.field legend {
+  padding: 0 0 6px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.field-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--no);
+}
+
+.room-code {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--match);
+  margin: 8px 0;
+}
+
+.reclaim-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reclaim-note {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.genre-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0 18px;
+}
+
+.genre-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ink-edge);
+  background: var(--ink-raised);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.genre-chip--on {
+  color: var(--ink);
+  background: var(--yes);
+  border-color: var(--yes);
+}
