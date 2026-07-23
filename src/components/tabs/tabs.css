@@ -186,6 +186,9 @@
 /* ---- Tab bar ---- */
 
 .tabbar {
+  /* The tab bar is the app's primary navigation; it must never be
+     shrunk or pushed off by whatever the current screen contains. */
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--ink-edge);
