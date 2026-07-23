@@ -164,6 +164,10 @@ const TOGETHER_SOLO_PROVIDER_REFRESH_DAYS = 7;
 // stale set has grown -- important once the cache reaches a few
 // thousand titles and most of it is simultaneously "30 days stale."
 const REFRESH_BATCH_CAP = 100;
+// Larger than the staleness cap because this is a one-time catch-up
+// that should finish in a few nights rather than trickle for weeks, but
+// still bounded so a single run stays polite against TMDB.
+const BACKFILL_BATCH_CAP = 250;
 
 // §4.3: "throttle to something polite (5-10 rps)". ~5.5 rps.
 const THROTTLE_MS = 180;
@@ -351,7 +355,7 @@ async function discoverPage(mediaType, slice, providerIdsCsv, page) {
 async function fetchDetail(mediaType, tmdbId) {
   const path = mediaType === 'movie' ? `/movie/${tmdbId}` : `/tv/${tmdbId}`;
   // keywords rides along on the same request -- no extra API call.
-  return tmdbGet(path, { append_to_response: 'watch/providers,keywords' });
+  return tmdbGet(path, { append_to_response: 'watch/providers,keywords,videos' });
 }
 
 function extractProviders(detail) {
@@ -408,6 +412,34 @@ function extractRuntime(mediaType, detail) {
   return Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
 }
 
+/**
+ * Best available YouTube trailer key, or null.
+ *
+ * Preference order matters: an official Trailer is what someone expects
+ * when they tap play, and a Teaser is a fair fallback. Clips and
+ * featurettes are excluded outright rather than used as a last resort --
+ * showing behind-the-scenes footage to someone who asked for a trailer
+ * is worse than showing nothing.
+ */
+function extractTrailerKey(detail) {
+  const vids = (detail?.videos?.results || []).filter((v) => v.site === 'YouTube');
+  const pick =
+    vids.find((v) => v.type === 'Trailer' && v.official) ||
+    vids.find((v) => v.type === 'Trailer') ||
+    vids.find((v) => v.type === 'Teaser' && v.official) ||
+    vids.find((v) => v.type === 'Teaser');
+  return pick ? pick.key : null;
+}
+
+/**
+ * TMDB's US watch page link -- a JustWatch page, NOT a per-service deep
+ * link. Used as the fallback behind the per-service search URLs built
+ * client-side in src/lib/links.js.
+ */
+function extractWatchLink(detail) {
+  return detail?.['watch/providers']?.results?.US?.link || null;
+}
+
 function titleRowFromDetail(mediaType, detail, genreMap) {
   const genreIds = (detail.genres || []).map((g) => g.id);
   const canonicalGenres = mapGenres(mediaType, genreIds, genreMap);
@@ -442,6 +474,12 @@ function titleRowFromDetail(mediaType, detail, genreMap) {
     excluded: hasHardExcludedGenre || tooManyEpisodes,
     is_reality: isReality,
     is_anime: detectAnime(mediaType, detail, genreIds),
+    trailer_key: extractTrailerKey(detail),
+    watch_link: extractWatchLink(detail),
+    // Marks "we have looked", which is what lets the backfill
+    // terminate: a title with genuinely no trailer gets a null key and
+    // a non-null checked_at, so it is never re-queried.
+    trailer_checked_at: now,
   };
 }
 
@@ -552,6 +590,48 @@ async function runRefreshPhase(genreMap) {
 }
 
 // ---------------------------------------------------------------------
+// Phase C: backfill trailers/watch links for titles that predate them
+// ---------------------------------------------------------------------
+//
+// Titles written before the trailer feature have trailer_checked_at
+// NULL. Nothing else would ever re-fetch them: the staleness pass only
+// triggers on 30-day provider age, so trailers would have appeared over
+// a month for whichever slice happened to expire, rather than for the
+// pool people are actually swiping.
+//
+// Ordered by popularity so the titles most likely to be on screen
+// tonight get their trailers first, and capped per run so this doesn't
+// turn one night's job into a multi-thousand-request burst.
+
+async function runTrailerBackfill(genreMap) {
+  let pending;
+  try {
+    pending = await supabaseGet(
+      `/titles?select=tmdb_id,media_type&trailer_checked_at=is.null&order=popularity.desc&limit=${BACKFILL_BATCH_CAP}`
+    );
+  } catch (err) {
+    console.warn(`Trailer backfill skipped: ${err.message}`);
+    return [];
+  }
+
+  if (!pending || pending.length === 0) {
+    console.log('Phase C (trailer backfill): nothing left to backfill.');
+    return [];
+  }
+
+  const rows = [];
+  for (const { tmdb_id, media_type } of pending) {
+    try {
+      const detail = await fetchDetail(media_type, tmdb_id);
+      rows.push(titleRowFromDetail(media_type, detail, genreMap));
+    } catch (err) {
+      console.warn(`Backfill failed for ${media_type}:${tmdb_id}: ${err.message}`);
+    }
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------
 
@@ -572,7 +652,16 @@ async function main() {
   const refreshed = await runRefreshPhase(genreMap);
   console.log(`Phase B (refresh): ${refreshed.length} stale titles re-verified.`);
 
-  const allRows = [...discovered, ...refreshed];
+  const backfilled = await runTrailerBackfill(genreMap);
+  if (backfilled.length > 0) {
+    const withTrailers = backfilled.filter((r) => r.trailer_key).length;
+    console.log(
+      `Phase C (trailer backfill): ${backfilled.length} titles checked, ` +
+      `${withTrailers} had a trailer.`
+    );
+  }
+
+  const allRows = [...discovered, ...refreshed, ...backfilled];
 
   if (allRows.length === 0) {
     console.warn('Nothing to upsert this run (both phases came back empty).');

@@ -10,8 +10,8 @@ import { supabase, rpc } from './supabase.js';
 import { CONFIG } from './config.js';
 import { buildDeck } from './deck.js';
 
-const QUEUE_KEY = 'tvtime.swipeQueue.v1';
-const DECK_KEY = 'tvtime.deck.v1';
+const QUEUE_KEY = 'flixpix.swipeQueue.v1';
+const DECK_KEY = 'flixpix.deck.v2';
 
 // ---------------------------------------------------------------------
 // Candidate fetch (§5.1 stage 2, §6.5)
@@ -45,7 +45,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   let query = supabase
     .from('titles')
     .select(
-      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language'
+      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language,trailer_key,watch_link'
     )
     .eq('excluded', false)
     .order('popularity', { ascending: false })

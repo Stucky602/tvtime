@@ -65,7 +65,12 @@ const server = http.createServer(async (req, res) => {
       overview: 'A mock movie.', poster_path: '/mock1.jpg', backdrop_path: null,
       vote_average: 7.4, vote_count: 3000, popularity: 55.2, original_language: 'en',
       genres: [{ id: 28, name: 'Action' }, { id: 12, name: 'Adventure' }],
-      'watch/providers': { results: { US: { flatrate: [{ provider_id: 8 }, { provider_id: 99 }] } } },
+      videos: { results: [
+        { site: 'Vimeo', type: 'Trailer', key: 'WRONG_SITE', official: true },
+        { site: 'YouTube', type: 'Teaser', key: 'TEASER_KEY', official: true },
+      ]},
+      'watch/providers': { results: { US: { link: 'https://justwatch.test/111',
+        flatrate: [{ provider_id: 8 }, { provider_id: 99 }] } } },
     });
   }
   if (p === '/movie/112') {
@@ -153,6 +158,14 @@ const server = http.createServer(async (req, res) => {
   if (p === '/rest/v1/rooms') {
     return send(200, [{ platforms: ['netflix', 'hulu'] }]);
   }
+  // Trailer backfill queue (Phase C)
+  if (p === '/rest/v1/titles' && req.method === 'GET'
+      && url.searchParams.get('trailer_checked_at') === 'is.null') {
+    if (backfillServed) return send(200, []); // terminates once served
+    backfillServed = true;
+    return send(200, [{ tmdb_id: 902, media_type: 'movie' }]);
+  }
+
   if (p === '/rest/v1/titles' && req.method === 'GET') {
     // A real Postgres would apply the providers_updated_at filter
     // server-side; this mock doesn't implement real filtering, so it
@@ -166,6 +179,20 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/rest/v1/user_title_buckets') {
     return send(200, [{ tmdb_id: 901, media_type: 'movie' }]);
+  }
+  if (p === '/movie/902') {
+    return send(200, {
+      id: 902, title: 'Backfill Movie', release_date: '2018-01-01', runtime: 95,
+      overview: 'x', poster_path: null, backdrop_path: null,
+      vote_average: 7.2, vote_count: 400, popularity: 33, original_language: 'en',
+      genres: [{ id: 18, name: 'Drama' }],
+      videos: { results: [
+        { site: 'YouTube', type: 'Featurette', key: 'IGNORE_ME', official: true },
+        { site: 'YouTube', type: 'Trailer', key: 'REAL_TRAILER', official: true },
+      ]},
+      'watch/providers': { results: { US: { link: 'https://justwatch.test/902',
+        flatrate: [{ provider_id: 8 }] } } },
+    });
   }
   if (p === '/movie/900') {
     return send(200, {
@@ -206,6 +233,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 const firstSeenPage = {};
+let backfillServed = false;
 
 async function main() {
   await new Promise((resolve) => server.listen(0, resolve));
@@ -281,6 +309,23 @@ async function main() {
 
   const inPlayRefreshed = byId['901:movie'];
   assert(inPlayRefreshed !== undefined, 'Phase B refreshed the in-play (Together/Solo) stale title (901)');
+
+  const backfilled = byId['902:movie'];
+  assert(backfilled !== undefined, 'Phase C backfilled a title that had never been checked');
+  assert(backfilled && backfilled.trailer_key === 'REAL_TRAILER',
+    'picks the official Trailer, not the Featurette');
+  assert(backfilled && backfilled.trailer_checked_at,
+    'stamps trailer_checked_at so the backfill terminates');
+  assert(backfilled && backfilled.watch_link === 'https://justwatch.test/902',
+    'captures the watch link');
+
+  const teaserOnly = byId['111:movie'];
+  assert(teaserOnly && teaserOnly.trailer_key === 'TEASER_KEY',
+    'falls back to a Teaser when no Trailer exists, and ignores non-YouTube');
+
+  const noVideos = byId['112:movie'];
+  assert(noVideos && noVideos.trailer_key === null,
+    'a title with no videos block gets a null key rather than throwing');
 
   console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURE(S)`}`);
   process.exit(failures === 0 ? 0 : 1);
