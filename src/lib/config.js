@@ -13,6 +13,8 @@
 //   W_PARTNER          -- how aggressively the deck chases resolving
 //                          Pending into Together/Solo.
 
+export const APP_NAME = 'FlixPix';
+
 export const CONFIG = {
   // ---- Deck shape (§5.1, §5.3) ----
   DECK_SIZE: 150,
@@ -84,12 +86,31 @@ export const CONFIG = {
 // component 4's `genres` table. Duplicated here as display metadata
 // only -- the database remains the source of truth for what a canonical
 // genre id MEANS; this is just how we label it in the UI.
+// The eight services FlixPix supports. `slug` is what lives in
+// `rooms.platforms` and `titles.providers`; `tmdbNames` are the names
+// TMDB/JustWatch uses, which the pool-refresh job matches against
+// TMDB's own provider list at runtime to resolve numeric IDs.
+//
+// Resolving by NAME rather than hardcoding IDs is deliberate. TMDB
+// provider IDs are not stable -- the HBO Max to Max rebrand changed
+// one out from under everybody -- and a stale hardcoded ID fails
+// silently by simply returning no titles. Names change far less often,
+// and when they do the job logs the mismatch instead of going quiet.
+// Several names are listed per service because TMDB distinguishes tiers
+// (ads vs no-ads) as separate providers.
 export const PLATFORMS = [
-  { slug: 'netflix', label: 'Netflix' },
-  { slug: 'prime', label: 'Prime Video' },
-  { slug: 'disney', label: 'Disney+' },
-  { slug: 'hulu', label: 'Hulu' },
+  { slug: 'netflix', label: 'Netflix', tmdbNames: ['Netflix', 'Netflix Standard with Ads'] },
+  { slug: 'prime', label: 'Prime Video', tmdbNames: ['Amazon Prime Video', 'Amazon Prime Video with Ads'] },
+  { slug: 'disney', label: 'Disney+', tmdbNames: ['Disney Plus', 'Disney+'] },
+  { slug: 'hulu', label: 'Hulu', tmdbNames: ['Hulu'] },
+  { slug: 'max', label: 'HBO Max', tmdbNames: ['Max', 'HBO Max', 'Max Amazon Channel'] },
+  { slug: 'appletv', label: 'Apple TV+', tmdbNames: ['Apple TV+', 'Apple TV Plus', 'Apple TV+ Amazon Channel'] },
+  { slug: 'peacock', label: 'Peacock', tmdbNames: ['Peacock Premium', 'Peacock Premium Plus', 'Peacock'] },
+  { slug: 'paramount', label: 'Paramount+', tmdbNames: ['Paramount Plus', 'Paramount+', 'Paramount+ Amazon Channel'] },
 ];
+
+/** Slugs only -- handy for validation and for the "all platforms" fallback. */
+export const PLATFORM_SLUGS = PLATFORMS.map((p) => p.slug);
 
 export const GENRES = [
   { id: 1, label: 'Action' },

@@ -61,13 +61,13 @@ export default defineConfig({
         clientsClaim: true,
       },
       manifest: {
-        name: 'Streaming Swipe',
-        short_name: 'Swipe',
-        description: 'Swipe on movies and shows together, see what you both want to watch.',
+        name: 'FlixPix',
+        short_name: 'FlixPix',
+        description: 'Swipe on movies and shows together. See what you both want to watch.',
         // Scope and start_url are relative to `base` above -- vite-plugin-pwa
         // resolves them automatically, don't hardcode a leading slash here.
-        theme_color: '#1a1a2e',
-        background_color: '#1a1a2e',
+        theme_color: '#10111a',
+        background_color: '#10111a',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

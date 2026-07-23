@@ -1,18 +1,29 @@
-/* Architecture ref: ARCHITECTURE_v1.0.md §6
- *
- * Styles for the swipe deck. Scoped with a `deck`/`card` prefix rather
- * than element selectors, to avoid the specificity collisions the
- * frontend-design skill warns about between type- and element-based
- * rules.
- */
+/* FlixPix -- swipe deck, comic/cel-shaded.
+   See src/index.css for the design rules these follow. */
+
+.swipescreen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.swipescreen__bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 0;
+}
 
 .deck {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 12px 16px 20px;
-  gap: 14px;
+  padding: 10px 14px 16px;
+  gap: 12px;
 }
 
 .deck__stack {
@@ -20,23 +31,16 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  /* THE FIX for the card overlapping the buttons.
-     A grid's implicit rows are sized to CONTENT (`auto`), so this row
-     grew to whatever the card needed -- 362px inside a 343px container
-     on a short screen -- and everything below it (Pass/Undo/Yes, the
-     progress line, the tab bar) got pushed off the bottom.
-     `minmax(0, 1fr)` makes the row exactly the container's height and
-     no more: the 0 minimum is what actually lets it shrink, since the
-     default `auto` minimum refuses to go below content size. */
+  /* A grid's implicit rows are content-sized, so this row used to grow
+     past its container and push the buttons off screen. minmax(0, 1fr)
+     pins it to the container height; the 0 minimum is what allows the
+     shrink at all. */
   grid-template-rows: minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
   place-items: stretch;
-  /* Belt and braces: even if a card somehow reports a larger size, it
-     gets clipped here rather than covering the controls. */
-  overflow: hidden;
+  overflow: visible; /* hard shadows must not be clipped */
 }
 
-/* The next card sits behind the top one so the stack reads as depth. */
 .deck__stack > .card--next {
   position: absolute;
   inset: 0;
@@ -49,7 +53,8 @@
   position: relative;
   z-index: 1;
   height: 100%;
-  /* Stops the browser claiming the horizontal gesture for scrolling. */
+  min-height: 0;
+  /* Horizontal belongs to the deck, vertical to the browser. */
   touch-action: pan-y;
   user-select: none;
 }
@@ -57,22 +62,37 @@
 /* ---- Card ---- */
 
 .card {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   height: 100%;
   max-height: 100%;
   min-height: 0;
-  background: var(--ink-raised);
-  border: 1px solid var(--ink-edge);
+  background: var(--panel);
+  border: var(--ink-w) solid var(--line);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hard);
   overflow: hidden;
   will-change: transform;
 }
 
+/* The scroller. Poster at true aspect ratio, details below it. */
+.card__scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.card__scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .card__art {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  width: 100%;
+  /* Real posters are 2:3. Honouring that is the whole point of this
+     rewrite -- the old layout forced the poster into whatever vertical
+     space was left and cropped the difference. */
+  aspect-ratio: 2 / 3;
   background: #000;
 }
 
@@ -83,9 +103,6 @@
   display: block;
 }
 
-/* §4.3: poster_path is frequently null. The title lives in the meta
-   block below, so the placeholder shows medium + year rather than
-   echoing the name. */
 .card__noart {
   display: flex;
   flex-direction: column;
@@ -94,123 +111,89 @@
   gap: 6px;
   height: 100%;
   padding: 28px;
-  background: linear-gradient(160deg, #171b23, #0d1015);
+  background: var(--panel-2);
+  background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.07) 1.5px, transparent 0);
+  background-size: 10px 10px;
 }
 
 .card__noart-mark {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  font-size: 16px;
+  letter-spacing: 0.2em;
   color: var(--text-dim);
 }
 
 .card__noart-year {
-  font-family: var(--font-display);
-  font-size: 54px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--ink-edge);
+  font-size: 60px;
   line-height: 1;
+  color: var(--line);
+  -webkit-text-stroke: 2px var(--text-faint);
 }
 
 .card__noart-note {
   font-size: 11px;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
 
-/* The signature element: a light leak along the leading edge as you
-   drag. Amber for yes, cold slate for pass -- readable peripherally, so
-   you can swipe without looking straight at a label. */
-.card__leak {
+/* Title burned onto the poster, so the card reads without scrolling. */
+.card__scrim {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: opacity 90ms linear;
-}
-
-.card__leak--yes {
-  background: linear-gradient(
-    270deg,
-    var(--yes-glow) 0%,
-    rgba(240, 169, 73, 0.12) 22%,
-    transparent 48%
-  );
-  box-shadow: inset -3px 0 24px -6px var(--yes);
-}
-
-.card__leak--no {
-  background: linear-gradient(
-    90deg,
-    var(--no-glow) 0%,
-    rgba(125, 144, 168, 0.1) 22%,
-    transparent 48%
-  );
-  box-shadow: inset 3px 0 24px -6px var(--no);
-}
-
-.card__verdict {
-  position: absolute;
-  top: 20px;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  padding: 7px 13px;
-  border-radius: 6px;
-  pointer-events: none;
-}
-
-.card__verdict--yes {
-  right: 18px;
-  color: var(--ink);
-  background: var(--yes);
-}
-
-.card__verdict--no {
-  left: 18px;
-  color: var(--ink);
-  background: var(--no);
-}
-
-.card__meta {
-  padding: 14px 16px 16px;
-  border-top: 1px solid var(--ink-edge);
-  background: var(--ink-raised);
-  max-height: 38%;
-  /* No overflow-y: auto. This used to be a nested scroll area sitting
-     directly under the swipe surface, so reaching down to read the
-     synopsis put a scrollable element and a drag handler in a fight for
-     the same touch. The More/Less button replaced the need for it. */
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 40px 14px 14px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 30%, transparent);
 }
 
 .card__title {
-  margin: 0 0 5px;
-  font-family: var(--font-display);
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  margin: 0 0 4px;
+  font-size: 27px;
+  line-height: 1.04;
+  color: var(--text);
 }
 
 .card__facts {
-  margin: 0 0 9px;
-  font-size: 13px;
-  color: var(--text-dim);
-  letter-spacing: 0.01em;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pop-yellow);
+}
+
+.card__scrollcue {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+
+.card__meta {
+  padding: 16px 14px 20px;
+  border-top: var(--ink-w) solid var(--line);
+  background: var(--panel);
+}
+
+.card__metahead {
+  margin: 14px 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
 }
 
 .card__synopsis {
-  margin: 0 0 10px;
-  font-size: 14px;
-  line-height: 1.5;
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
   color: var(--text-dim);
 }
 
@@ -225,102 +208,151 @@
 
 .card__providers li {
   font-size: 11px;
-  letter-spacing: 0.09em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-faint);
-  border: 1px solid var(--ink-edge);
-  border-radius: 5px;
-  padding: 3px 8px;
+  color: var(--line);
+  background: var(--paper);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
 }
 
-/* ---- Match indicator (§6: transient, then gone) ---- */
+/* ---- Verdict overlays ---- */
+
+.card__leak {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 90ms linear;
+  z-index: 3;
+}
+
+.card__leak--yes {
+  background: linear-gradient(270deg, rgba(255, 210, 63, 0.5) 0%, transparent 48%);
+}
+
+.card__leak--no {
+  background: linear-gradient(90deg, rgba(140, 154, 181, 0.45) 0%, transparent 48%);
+}
+
+.card__verdict {
+  position: absolute;
+  top: 26px;
+  z-index: 4;
+  font-size: 30px;
+  padding: 8px 16px;
+  border: var(--ink-w) solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow-hard-sm);
+  pointer-events: none;
+  color: var(--line);
+}
+
+.card__verdict--yes {
+  right: 16px;
+  background: var(--pop-yellow);
+  transform: rotate(9deg) skewX(-4deg);
+}
+
+.card__verdict--no {
+  left: 16px;
+  background: var(--no);
+  transform: rotate(-9deg) skewX(-4deg);
+}
+
+/* ---- Match burst ---- */
 
 .match {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 5;
   display: grid;
   place-content: center;
-  gap: 4px;
+  gap: 6px;
   text-align: center;
   pointer-events: none;
-  background: rgba(10, 12, 16, 0.55);
-  backdrop-filter: blur(2px);
-  animation: match-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  background: rgba(16, 17, 26, 0.72);
+  animation: match-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .match__word {
   font-family: var(--font-display);
-  font-size: 46px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--match);
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 54px;
+  line-height: 1;
+  color: var(--pop-red);
+  -webkit-text-stroke: 3px var(--line);
+  paint-order: stroke fill;
+  transform: rotate(-6deg) skewX(-6deg);
+  text-shadow: 5px 5px 0 var(--line);
 }
 
 .match__sub {
-  font-size: 13px;
-  color: var(--text-dim);
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w-sm) solid var(--line);
+  padding: 5px 10px;
+  border-radius: 4px;
+  transform: rotate(-2deg);
 }
 
 @keyframes match-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-/* ---- Controls (§6: button equivalent for every gesture) ---- */
+/* ---- Controls ---- */
 
 .controls {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   gap: 10px;
   align-items: center;
-  /* Never let the controls be compressed to make room for a card --
-     the card shrinks, the buttons do not. */
-  flex-shrink: 0;
 }
 
 .ctl {
   min-height: var(--tap);
   border-radius: var(--radius-control);
   font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  border: 1px solid var(--ink-edge);
-  background: var(--ink-raised);
-  transition: transform 90ms ease, border-color 140ms ease;
+  border: var(--ink-w) solid var(--line);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--line);
+  transition: transform 70ms ease, box-shadow 70ms ease;
 }
 
+/* Press = the panel physically sinks onto the page. */
 .ctl:active {
-  transform: scale(0.97);
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--line);
 }
 
-.ctl--yes {
-  color: var(--yes);
-  border-color: rgba(240, 169, 73, 0.4);
-}
-
-.ctl--no {
-  color: var(--no);
-  border-color: rgba(125, 144, 168, 0.32);
-}
+.ctl--yes { background: var(--pop-yellow); }
+.ctl--no { background: var(--no); }
 
 .ctl--undo {
   padding-inline: 16px;
-  color: var(--text-faint);
   font-size: 13px;
+  background: var(--panel-2);
+  color: var(--text-dim);
 }
 
 .ctl--undo:disabled {
-  opacity: 0.32;
+  opacity: 0.35;
   cursor: default;
+  transform: none;
+  box-shadow: var(--shadow-hard-sm);
 }
 
 /* ---- States ---- */
@@ -328,16 +360,18 @@
 .deck--empty {
   place-content: center;
   text-align: center;
-  gap: 8px;
-  padding: 40px 28px;
+  gap: 10px;
+  padding: 40px 24px;
 }
 
 .empty__head {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 22px;
+  color: var(--pop-yellow);
+  transform: skewX(-4deg);
 }
 
 .empty__body {
@@ -352,29 +386,97 @@
 .notice {
   margin: 0;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
-/* Dev-only score readout (§13: the tuning tool, in place of a
-   simulation harness). */
+.deck__progress {
+  flex-shrink: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.deck__undohint {
+  color: var(--pop-cyan);
+}
+
+.waiting {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 14px 0;
+  padding: 10px 12px;
+  background: var(--pop-cyan);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.waiting__text {
+  margin: 0;
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--line);
+}
+
+.waiting__code {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.sync-note {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.filter-toggle,
+.gear {
+  min-height: 38px;
+  padding: 0 14px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--paper);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.filter-toggle:active,
+.gear:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--line);
+}
+
 .devscore {
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 4;
+  z-index: 6;
   margin: 0;
   padding: 6px 8px;
   font-size: 10px;
-  line-height: 1.35;
-  color: var(--text-faint);
-  background: rgba(10, 12, 16, 0.82);
-  border: 1px solid var(--ink-edge);
-  border-radius: 6px;
+  color: var(--line);
+  background: var(--pop-cyan);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 4px;
   pointer-events: none;
 }
 
-/* ---- Filter panel (§5.3) ---- */
+/* ---- Filter sheet ---- */
 
 .filter-sheet {
   position: fixed;
@@ -382,72 +484,74 @@
   z-index: 10;
   max-height: 82vh;
   overflow-y: auto;
-  background: var(--ink-raised);
-  border-top: 1px solid var(--ink-edge);
-  border-radius: 20px 20px 0 0;
-  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
-  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
+  background: var(--panel);
+  border-top: var(--ink-w) solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
 }
 
 .filter-sheet__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .filter-sheet__head h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 19px;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 20px;
+  transform: skewX(-4deg);
 }
 
 .filter-sheet__head button {
-  color: var(--yes);
-  font-weight: 600;
-  font-size: 14px;
-  min-height: var(--tap);
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 8px 14px;
+  min-height: 40px;
 }
 
-.filter-group {
-  margin-bottom: 16px;
-}
+.filter-group { margin-bottom: 16px; }
 
 .filter-group h3 {
   margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-weight: 900;
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
 
-.filter-row {
-  display: flex;
-  gap: 8px;
-}
-
-.filter-row--wrap {
-  flex-wrap: wrap;
-}
+.filter-row { display: flex; gap: 8px; }
+.filter-row--wrap { flex-wrap: wrap; }
 
 .filter-chip {
   padding: 8px 13px;
   border-radius: 999px;
-  border: 1px solid var(--ink-edge);
-  background: var(--ink);
+  border: var(--ink-w-sm) solid var(--line);
+  background: var(--panel-2);
   font-size: 13px;
+  font-weight: 700;
   color: var(--text-dim);
 }
 
 .filter-chip--on {
-  color: var(--ink);
-  background: var(--yes);
-  border-color: var(--yes);
+  color: var(--line);
+  background: var(--pop-yellow);
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .filter-warning {
   font-size: 13px;
-  color: var(--no);
+  font-weight: 700;
+  color: var(--pop-red);
   margin: 0 0 14px;
 }
 
@@ -455,122 +559,4 @@
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: 10px;
-}
-
-.filter-toggle {
-  min-height: 36px;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-dim);
-  border: 1px solid var(--ink-edge);
-  border-radius: 999px;
-  align-self: center;
-}
-
-/* ---- Update 1/3/5 additions ---- */
-
-/* Update 3: expandable synopsis. Previously .card__meta was capped with
-   overflow-y:auto, which put a nested scroll area directly under the
-   swipe gesture -- two things competing for the same drag. Now the text
-   clamps and expands in place instead of scrolling. */
-.card__synopsis--clamped {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.card__meta--expanded {
-  max-height: 68%;
-}
-
-.card__more {
-  align-self: flex-start;
-  padding: 4px 0 8px;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--yes);
-}
-
-/* Update 5: remaining-cards readout. Deliberately quiet -- it's
-   orientation, not a scoreboard. */
-.deck__progress {
-  flex-shrink: 0;
-  margin: 0;
-  text-align: center;
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.deck__undohint {
-  color: var(--text-dim);
-  text-transform: none;
-  letter-spacing: 0.02em;
-}
-
-/* Update 5: the waiting-for-partner banner (§9 requires this state to
-   surface the room code for re-sharing -- it previously did not exist
-   anywhere in the UI). */
-.waiting {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 10px;
-  padding: 10px 12px;
-  background: var(--ink-raised);
-  border: 1px solid var(--ink-edge);
-  border-radius: var(--radius-control);
-}
-
-.waiting__text {
-  margin: 0;
-  flex: 1;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--text-dim);
-}
-
-.waiting__code {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--match);
-}
-
-/* Header row above the deck: filters on the left, settings on the right. */
-.swipescreen {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.swipescreen__bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 16px 0;
-}
-
-.sync-note {
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
-.gear {
-  min-height: 36px;
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-dim);
-  border: 1px solid var(--ink-edge);
-  border-radius: 999px;
 }

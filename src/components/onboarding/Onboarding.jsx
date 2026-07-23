@@ -108,8 +108,11 @@ export default function Onboarding({ onComplete }) {
 function Welcome({ onCreate, onJoin }) {
   return (
     <div className="onboard-screen">
-      <h1 className="onboard-title">Streaming Swipe</h1>
-      <p className="onboard-sub">Swipe on movies and shows together, see what you both want to watch.</p>
+      <h1 className="brand">FlixPix</h1>
+      <p className="onboard-sub">
+        Swipe on movies and shows together. Match on what you both want, and
+        find out what you're free to watch without waiting.
+      </p>
       <button className="onboard-btn onboard-btn--primary" onClick={onCreate}>
         Create a room
       </button>

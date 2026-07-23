@@ -5,6 +5,8 @@ import {
   updateIncludeReality,
   updateGenrePrefs,
   leaveRoom,
+  removeMember,
+  resetMyData,
 } from '../../lib/room.js';
 import { clearCachedDeck } from '../../lib/data.js';
 
@@ -35,6 +37,9 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmKick, setConfirmKick] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetGenres, setResetGenres] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
 
@@ -178,6 +183,106 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
       >
         {saving ? 'Saving…' : dirty ? 'Save changes' : 'No changes'}
       </button>
+
+      {partner && (
+        <section className="settings__group">
+          <h2>Partner</h2>
+          <p className="settings__hint">
+            {partner.display_name} is in this room. Removing them frees the second
+            slot so someone else can join with the code and PIN. Their swipes are
+            kept, not deleted.
+          </p>
+          {confirmKick ? (
+            <div className="settings__confirm">
+              <button className="onboard-btn" onClick={() => setConfirmKick(false)}>
+                Cancel
+              </button>
+              <button
+                className="onboard-btn settings__leave"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  setError(null);
+                  try {
+                    const res = await removeMember(partner.id);
+                    if (res.status === 'OK') {
+                      clearCachedDeck();
+                      onRoomLeft();
+                    } else {
+                      setError(res.status);
+                    }
+                  } catch (err) {
+                    setError(err.message || 'Could not remove them.');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Yes, remove
+              </button>
+            </div>
+          ) : (
+            <button className="onboard-btn settings__leave" onClick={() => setConfirmKick(true)}>
+              Remove {partner.display_name}
+            </button>
+          )}
+        </section>
+      )}
+
+      <section className="settings__group">
+        <h2>Start over</h2>
+        <p className="settings__hint">
+          Deletes every swipe you've made and rebuilds your deck from scratch.
+          Your partner's swipes are untouched, and your shared Watched list is
+          kept. This cannot be undone.
+        </p>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={resetGenres}
+            onChange={(e) => setResetGenres(e.target.checked)}
+          />
+          Also clear my genre picks
+        </label>
+        {confirmReset ? (
+          <div className="settings__confirm">
+            <button className="onboard-btn" onClick={() => setConfirmReset(false)}>
+              Cancel
+            </button>
+            <button
+              className="onboard-btn settings__leave"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                setError(null);
+                try {
+                  const res = await resetMyData(resetGenres);
+                  if (res.status === 'OK') {
+                    clearCachedDeck();
+                    setSavedNote(
+                      `Wiped ${res.swipes_deleted} swipe${res.swipes_deleted === 1 ? '' : 's'}. Your deck is fresh.`
+                    );
+                    setConfirmReset(false);
+                    setTimeout(() => setSavedNote(null), 5000);
+                  } else {
+                    setError(res.status);
+                  }
+                } catch (err) {
+                  setError(err.message || 'Could not reset.');
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              Yes, wipe my swipes
+            </button>
+          </div>
+        ) : (
+          <button className="onboard-btn settings__leave" onClick={() => setConfirmReset(true)}>
+            Reset my data
+          </button>
+        )}
+      </section>
 
       <section className="settings__group settings__danger">
         <h2>Leave room</h2>

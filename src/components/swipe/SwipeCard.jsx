@@ -1,25 +1,23 @@
 import { useState } from 'react';
 import { posterUrl } from '../../lib/config.js';
 
-// Architecture ref: ARCHITECTURE_v1.0.md §4.3 (missing posters, runtime,
-// year), §6 (gesture feel)
+// FlixPix card.
 //
-// One card. Purely presentational -- drag state is owned by SwipeDeck and
-// passed down, so the deck can render the next card underneath without
-// this component knowing anything about the stack.
+// LAYOUT (rewritten this round). The previous version split the card
+// into a flexed poster area plus a capped meta panel, which squashed the
+// poster: real posters are 2:3, the available space was not, and
+// object-fit: cover cropped the difference away.
 //
-// The signature interaction lives here: as the card is dragged, a
-// light-leak edge glows along the leading side -- amber right, cold slate
-// left. It's readable peripherally, which matters because the actual use
-// case is two people half-watching their own screens while talking to
-// each other.
+// Now the poster keeps its true 2:3 aspect ratio and fills the card,
+// and the details live BELOW it in the same scrollable column. You
+// scroll down to read them. That is only safe because of the axis lock
+// in lib/gesture.js -- a vertical drag is classified as vertical and
+// goes inert, so native scrolling and horizontal swiping no longer
+// compete for the same touch. This layout would have been unusable
+// before that fix.
 //
-// Update 3: the synopsis is now expandable. Previously the meta block
-// was capped at 38% of card height with `overflow-y: auto`, so a long
-// synopsis became a tiny internal scroll area that fought the swipe
-// gesture for the same touch. Now it clamps to three lines with a
-// "More" affordance, and expanding it grows the panel over the poster
-// instead of introducing a nested scroller.
+// The bottom strip of the poster carries a gradient scrim with the
+// title on it, so you can identify the card without scrolling at all.
 
 export default function SwipeCard({
   title,
@@ -27,26 +25,17 @@ export default function SwipeCard({
   dy = 0,
   dragging = false,
   isNext = false,
-  expanded = false,
-  onToggleExpand,
 }) {
   const [posterFailed, setPosterFailed] = useState(false);
-  const poster = posterUrl(title.poster_path);
+  const poster = posterUrl(title.poster_path, 'w780');
 
-  // Rotation is tied to horizontal travel, capped so the card never
-  // reads as spinning. Divisor chosen by feel: a full-width drag lands
-  // around 12 degrees, enough to feel physical, short of theatrical.
   const rotation = Math.max(-12, Math.min(12, dx / 14));
   const verdict = dx > 40 ? 'yes' : dx < -40 ? 'no' : null;
-  // Opacity ramps to full over ~140px so the signal arrives well before
-  // the commit threshold, giving a chance to change your mind.
   const leak = Math.min(1, Math.abs(dx) / 140);
 
   const style = isNext
     ? {
-        // The card underneath scales up slightly as the top card leaves,
-        // so the stack reads as depth rather than a hard swap.
-        transform: `scale(${0.94 + Math.min(1, Math.abs(dx) / 220) * 0.06})`,
+        transform: `scale(${0.94 + Math.min(1, Math.abs(dx) / 220) * 0.06}) rotate(-1.5deg)`,
         opacity: 0.55 + Math.min(1, Math.abs(dx) / 220) * 0.45,
       }
     : {
@@ -55,95 +44,79 @@ export default function SwipeCard({
       };
 
   const year = title.year || null;
-  // §4.3: TV episode_run_time is often empty and movie runtime can be
-  // null. An em dash reads better than "0 min".
   const runtime = title.runtime ? `${title.runtime} min` : null;
   const rating = title.vote_count >= 100 && title.rating ? title.rating.toFixed(1) : null;
 
-  const hasLongSynopsis = (title.synopsis || '').length > 150;
-
   return (
-    <article
-      className={`card ${isNext ? 'card--next' : ''}`}
-      style={style}
-      aria-hidden={isNext}
-    >
-      <div className="card__art">
-        {poster && !posterFailed ? (
-          <img
-            src={poster}
-            alt=""
-            draggable="false"
-            onError={() => setPosterFailed(true)}
-          />
-        ) : (
-          // §4.3: poster_path is frequently null. The title already
-          // appears in the meta block below, so repeating it here reads
-          // as a rendering bug -- caught on a screenshot pass. Show the
-          // medium and year instead: still enough to orient, without the
-          // echo.
-          <div className="card__noart">
-            <span className="card__noart-mark">
-              {title.media_type === 'tv' ? 'Series' : 'Film'}
+    <article className={`card ${isNext ? 'card--next' : ''}`} style={style} aria-hidden={isNext}>
+      {/* The scroll container. touch-action: pan-y lets the browser own
+          vertical scrolling here while the deck owns horizontal swipes. */}
+      <div className="card__scroll">
+        <div className="card__art">
+          {poster && !posterFailed ? (
+            <img src={poster} alt="" draggable="false" onError={() => setPosterFailed(true)} />
+          ) : (
+            <div className="card__noart">
+              <span className="card__noart-mark shout">
+                {title.media_type === 'tv' ? 'Series' : 'Film'}
+              </span>
+              {title.year && <span className="card__noart-year shout">{title.year}</span>}
+              <span className="card__noart-note">No artwork</span>
+            </div>
+          )}
+
+          {/* Title burned onto the poster so the card is identifiable
+              without scrolling. */}
+          <div className="card__scrim">
+            <h2 className="card__title shout inked-text">{title.title}</h2>
+            <p className="card__facts">
+              {[
+                title.media_type === 'tv' ? 'Series' : 'Film',
+                year,
+                runtime,
+                rating ? `${rating}/10` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
+
+          {!isNext && (
+            <span className="card__scrollcue" aria-hidden="true">
+              Scroll for details
             </span>
-            {title.year && <span className="card__noart-year">{title.year}</span>}
-            <span className="card__noart-note">No artwork</span>
-          </div>
-        )}
+          )}
+        </div>
 
-        {!isNext && (
-          <>
-            <div className="card__leak card__leak--yes" style={{ opacity: dx > 0 ? leak : 0 }} />
-            <div className="card__leak card__leak--no" style={{ opacity: dx < 0 ? leak : 0 }} />
-          </>
-        )}
-
-        {!isNext && verdict && (
-          <div className={`card__verdict card__verdict--${verdict}`} style={{ opacity: leak }}>
-            {verdict === 'yes' ? 'Yes' : 'Pass'}
-          </div>
-        )}
+        <div className="card__meta">
+          {title.synopsis && <p className="card__synopsis">{title.synopsis}</p>}
+          {title.providers?.length > 0 && (
+            <>
+              <h3 className="card__metahead shout">Streaming on</h3>
+              <ul className="card__providers">
+                {title.providers.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className={`card__meta ${expanded ? 'card__meta--expanded' : ''}`}>
-        <h2 className="card__title">{title.title}</h2>
-        <p className="card__facts">
-          {[
-            title.media_type === 'tv' ? 'Series' : 'Film',
-            year,
-            runtime,
-            rating ? `${rating}/10` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
-        {title.synopsis && (
-          <p className={`card__synopsis ${expanded ? '' : 'card__synopsis--clamped'}`}>
-            {title.synopsis}
-          </p>
-        )}
-        {!isNext && hasLongSynopsis && (
-          <button
-            className="card__more"
-            // Pointer events on the deck handle dragging; stop this tap
-            // from also being read as the start of a swipe.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpand?.();
-            }}
-          >
-            {expanded ? 'Less' : 'More'}
-          </button>
-        )}
-        {title.providers?.length > 0 && (
-          <ul className="card__providers">
-            {title.providers.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* Verdict overlays sit OUTSIDE the scroller so they stay put
+          while the card content scrolls under them. */}
+      {!isNext && (
+        <>
+          <div className="card__leak card__leak--yes" style={{ opacity: dx > 0 ? leak : 0 }} />
+          <div className="card__leak card__leak--no" style={{ opacity: dx < 0 ? leak : 0 }} />
+        </>
+      )}
+
+      {!isNext && verdict && (
+        <div className={`card__verdict card__verdict--${verdict} shout`} style={{ opacity: leak }}>
+          {verdict === 'yes' ? 'Yes!' : 'Nope'}
+        </div>
+      )}
     </article>
   );
 }

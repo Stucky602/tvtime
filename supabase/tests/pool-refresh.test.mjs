@@ -123,6 +123,20 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // ---- TMDB provider list (runtime ID resolution) ----
+  if (p === '/watch/providers/movie') {
+    return send(200, { results: [
+      { provider_id: 8, provider_name: 'Netflix' },
+      { provider_id: 9, provider_name: 'Amazon Prime Video' },
+      { provider_id: 337, provider_name: 'Disney Plus' },
+      { provider_id: 15, provider_name: 'Hulu' },
+      { provider_id: 1899, provider_name: 'Max' },
+      { provider_id: 350, provider_name: 'Apple TV+' },
+      { provider_id: 386, provider_name: 'Peacock Premium' },
+      { provider_id: 531, provider_name: 'Paramount Plus' },
+    ]});
+  }
+
   // ---- Supabase REST ----
   if (p === '/rest/v1/tmdb_genre_map') {
     return send(200, [

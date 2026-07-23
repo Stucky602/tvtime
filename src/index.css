@@ -1,56 +1,69 @@
-/* Architecture ref: ARCHITECTURE_v1.0.md §6 (gestures, fallbacks), §9
+/* FlixPix -- comic book / cel-shaded design system
  *
  * DESIGN DIRECTION
  *
- * The poster is the content. TMDB artwork is dense, saturated, and wildly
- * inconsistent between titles -- any decorative palette the interface adds
- * competes with it and loses. So the chrome recedes almost entirely and the
- * posters carry all the color in the app.
+ * Cel shading means flat fills and hard edges: no gradients, no soft
+ * blurred shadows, no subtle depth. Everything is an inked shape sitting
+ * on another inked shape. That happens to suit a swipe app, because the
+ * card needs to read as a physical object you're throwing around.
  *
- * Ground is a deep blue-black, the color of a room with the TV on and the
- * lights off. The single accent is a warm amber pulled from a dimmed lamp,
- * and it appears in exactly two places: the "yes" verdict and the active tab.
- * Everything else is greyscale.
+ * The rules, applied everywhere:
+ *   1. Every meaningful surface gets a solid black outline (3px, 2px on
+ *      small controls). Ink is the primary structural element.
+ *   2. Shadows are HARD offsets, never blurred -- `4px 4px 0 #000`.
+ *      A blurred shadow is the single fastest way to break the look.
+ *   3. Colour is flat and saturated. Comic ink was cheap; gradients
+ *      were not.
+ *   4. Halftone dots for texture, since that's the actual print
+ *      artefact that reads as "comic" more than anything else.
+ *   5. Display type is heavy, uppercase, and tight, with a slight
+ *      italic skew on the loudest elements.
  *
- * The two verdicts are colour-coded so they read peripherally -- amber for
- * yes, cold slate for no -- because someone half-watching their own screen
- * while talking to their partner should be able to swipe without looking
- * directly at a label.
- *
- * Type: a condensed grotesque for titles, echoing the vertical compression
- * of a poster's own credit block, against a plain system stack for body. No
- * webfont download -- this is a PWA people open for thirty seconds at a
- * time, and a font swap flash costs more than the character gains.
+ * Ground stays dark because the content is movie posters, and posters
+ * are dense saturated artwork that a cream paper background would fight
+ * with. So: dark ink panel stock, bright comic accents, black outlines.
  */
 
 :root {
-  /* Ground and surfaces */
-  --ink: #0a0c10;
-  --ink-raised: #14171e;
-  --ink-edge: #232833;
+  /* Ink and paper */
+  --ink: #10111a;          /* page */
+  --panel: #1c1f2b;        /* raised surface */
+  --panel-2: #262a3a;      /* second-level surface */
+  --line: #000000;         /* the outline colour, always pure black */
+  --paper: #f6efdd;        /* cream, for inverted "printed" chips */
 
   /* Type */
-  --text: #f2f4f8;
-  --text-dim: #98a0b0;
-  --text-faint: #5d6472;
+  --text: #f7f4ec;
+  --text-dim: #a6adc0;
+  --text-faint: #6a7186;
 
-  /* The two verdicts */
-  --yes: #f0a949;
-  --yes-glow: rgba(240, 169, 73, 0.55);
-  --no: #7d90a8;
-  --no-glow: rgba(125, 144, 168, 0.45);
+  /* Comic accents -- flat, saturated, few */
+  --pop-yellow: #ffd23f;
+  --pop-red: #ff4b5c;
+  --pop-cyan: #4ad9e8;
+  --pop-blue: #4d7cff;
 
-  /* Feedback */
-  --match: #f5c26b;
+  /* Semantic */
+  --yes: var(--pop-yellow);
+  --no: #8c9ab5;
+  --match: var(--pop-red);
 
-  --radius-card: 18px;
-  --radius-control: 12px;
+  /* Ink weights */
+  --ink-w: 3px;
+  --ink-w-sm: 2px;
+  --shadow-hard: 5px 5px 0 var(--line);
+  --shadow-hard-sm: 3px 3px 0 var(--line);
 
-  --font-display: ui-sans-serif, "SF Compact Display", "Roboto Condensed",
-    "Helvetica Neue", system-ui, sans-serif;
+  --radius-card: 14px;
+  --radius-control: 10px;
+
+  /* Heavy condensed stack. No webfont: FlixPix is opened for thirty
+     seconds at a time and a font-swap flash costs more than the
+     character gains. These weights are what carry the comic feel. */
+  --font-display: "Arial Black", "Helvetica Neue", Impact, system-ui, sans-serif;
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  --tap: 48px; /* minimum touch target */
+  --tap: 48px;
 
   color-scheme: dark;
 }
@@ -70,9 +83,16 @@ body {
   background: var(--ink);
   color: var(--text);
   font-family: var(--font-body);
-  /* Swipe gestures and pull-to-refresh fight each other on mobile. */
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
+
+  /* Halftone. Two offset dot grids at low opacity read as printed
+     newsprint without becoming a visible pattern. */
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.045) 1px, transparent 0),
+    radial-gradient(circle at 4px 4px, rgba(77, 124, 255, 0.035) 1px, transparent 0);
+  background-size: 8px 8px, 8px 8px;
+  background-attachment: fixed;
 }
 
 .app {
@@ -83,12 +103,12 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Visible keyboard focus everywhere -- gestures are the primary input,
-   but section 6 requires every action to have a reachable button equivalent. */
+/* Focus has to survive on top of black outlines, so it's a bright
+   offset ring rather than a subtle one. */
 :focus-visible {
-  outline: 2px solid var(--yes);
+  outline: 3px solid var(--pop-cyan);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 button {
@@ -97,6 +117,32 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+}
+
+/* Reusable comic primitives -------------------------------------- */
+
+/* An inked panel: flat fill, black outline, hard offset shadow. */
+.panel {
+  background: var(--panel);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hard);
+}
+
+/* Loud display text: heavy, uppercase, tight, slightly skewed. */
+.shout {
+  font-family: var(--font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  transform: skewX(-4deg);
+}
+
+/* Text with an ink outline behind it, the way comic lettering sits on
+   busy artwork. Uses paint-order so the stroke never eats the glyph. */
+.inked-text {
+  -webkit-text-stroke: 2px var(--line);
+  paint-order: stroke fill;
 }
 
 @media (prefers-reduced-motion: reduce) {

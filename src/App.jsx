@@ -78,7 +78,8 @@ export default function App() {
     return (
       <div className="app">
         <div className="onboard-screen">
-          <h1 className="onboard-title">Not configured</h1>
+          <h1 className="brand">FlixPix</h1>
+          <h2 className="onboard-title">Not configured</h2>
           <p className="onboard-sub">
             This build is missing Supabase credentials. Copy <code>.env.example</code> to{' '}
             <code>.env</code>, fill in the two values, and rebuild. See the README's Database

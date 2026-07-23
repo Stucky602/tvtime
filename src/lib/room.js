@@ -70,6 +70,20 @@ export function leaveRoom() {
   return rpc('leave_room');
 }
 
+/** Kick your partner out of the room (either member may do this). */
+export function removeMember(memberUserId) {
+  return rpc('remove_member', { p_member_user_id: memberUserId });
+}
+
+/**
+ * Wipe YOUR swipes (and optionally genre picks) without leaving the
+ * room or touching your partner's data. The shared watched list is
+ * deliberately left alone -- see the migration for why.
+ */
+export function resetMyData(clearGenres = false) {
+  return rpc('reset_my_data', { p_clear_genres: clearGenres });
+}
+
 /** §5's column grant: members may update platforms, nothing else on rooms. */
 export async function updatePlatforms(roomId, platforms) {
   const { error } = await supabase.from('rooms').update({ platforms }).eq('id', roomId);

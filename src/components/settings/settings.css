@@ -21,17 +21,28 @@
 .settings__head h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 30px;
+  color: var(--pop-yellow);
+  transform: skewX(-4deg);
+  -webkit-text-stroke: 2px var(--line);
+  paint-order: stroke fill;
 }
 
 .settings__close {
-  color: var(--yes);
-  font-weight: 600;
-  font-size: 15px;
-  min-height: var(--tap);
-  padding: 0 4px;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  min-height: 42px;
+  padding: 0 16px;
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .settings__group {
@@ -39,15 +50,17 @@
   flex-direction: column;
   gap: 8px;
   padding-bottom: 18px;
-  border-bottom: 1px solid var(--ink-edge);
+  border-bottom: var(--ink-w-sm) solid var(--line);
 }
 
 .settings__group h2 {
   margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--pop-cyan);
 }
 
 .settings__hint {
@@ -60,19 +73,30 @@
 /* The room code is the single most important thing on this screen --
    it's the only way a second person ever gets in. Sized accordingly. */
 .settings__code {
-  margin: 4px 0;
+  margin: 6px 0;
   font-family: var(--font-display);
-  font-size: 40px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: 900;
+  font-size: 42px;
+  letter-spacing: 0.12em;
   text-align: center;
-  color: var(--match);
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w) solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-hard);
+  padding: 12px 8px;
+  transform: rotate(-1.5deg);
 }
 
 .settings__saved {
   margin: 0;
   font-size: 13px;
-  color: var(--yes);
+  font-weight: 800;
+  color: var(--line);
+  background: var(--pop-cyan);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
 .settings__danger {
@@ -80,8 +104,8 @@
 }
 
 .settings__leave {
-  color: var(--no);
-  border-color: rgba(125, 144, 168, 0.35);
+  color: var(--text);
+  background: var(--pop-red);
 }
 
 .settings__confirm {

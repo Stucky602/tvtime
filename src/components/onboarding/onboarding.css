@@ -1,115 +1,172 @@
-/* Architecture ref: ARCHITECTURE_v1.0.md §7, §5.4 (genre onboarding) */
+/* FlixPix -- onboarding + shared form primitives, comic/cel-shaded.
+   Settings reuses these, so they live here rather than being duplicated. */
 
-.onboarding {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
+.onboarding { flex: 1; display: flex; flex-direction: column; }
 
 .onboard-screen {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 28px 22px;
+  padding: 26px 20px;
   overflow-y: auto;
 }
 
 .onboard-back {
   align-self: flex-start;
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--text-dim);
-  padding: 6px 0;
+  padding: 8px 0;
 }
 
 .onboard-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 34px;
+  line-height: 1.02;
+  color: var(--pop-yellow);
+  transform: skewX(-4deg);
+  -webkit-text-stroke: 2.5px var(--line);
+  paint-order: stroke fill;
+}
+
+/* The wordmark on the welcome screen. */
+.brand {
+  font-family: var(--font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 52px;
+  line-height: 1;
+  color: var(--pop-yellow);
+  transform: rotate(-3deg) skewX(-6deg);
+  -webkit-text-stroke: 3px var(--line);
+  paint-order: stroke fill;
+  text-shadow: 6px 6px 0 var(--line);
+  margin: 10px 0 6px;
+  align-self: flex-start;
 }
 
 .onboard-sub {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.5;
   color: var(--text-dim);
 }
 
 .onboard-btn {
   min-height: var(--tap);
-  border: 1px solid var(--ink-edge);
-  background: var(--ink-raised);
+  border: var(--ink-w) solid var(--line);
+  background: var(--panel-2);
   border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 900;
   font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text);
   text-align: center;
+  transition: transform 70ms ease, box-shadow 70ms ease;
+}
+
+.onboard-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--line);
 }
 
 .onboard-btn--primary {
-  color: var(--ink);
-  background: var(--yes);
-  border-color: var(--yes);
+  color: var(--line);
+  background: var(--pop-yellow);
 }
 
 .onboard-btn:disabled {
   opacity: 0.4;
+  transform: none;
+  box-shadow: var(--shadow-hard-sm);
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
-  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 .field input {
   min-height: var(--tap);
   padding: 0 12px;
   border-radius: var(--radius-control);
-  border: 1px solid var(--ink-edge);
-  background: var(--ink-raised);
-  color: var(--text);
-  font-size: 16px; /* prevents iOS auto-zoom on focus */
+  border: var(--ink-w) solid var(--line);
+  background: var(--paper);
+  color: var(--line);
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  /* 16px prevents iOS from zooming the viewport on focus. */
+  font-size: 16px;
 }
 
-fieldset.field {
-  border: none;
-  padding: 0;
-  margin: 0;
-}
-
-fieldset.field legend {
-  padding: 0 0 6px;
-}
+fieldset.field { border: none; padding: 0; margin: 0; }
+fieldset.field legend { padding: 0 0 6px; }
 
 .checkbox {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 44px;
+  font-family: var(--font-body);
   font-size: 15px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--text);
+}
+
+.checkbox input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--pop-yellow);
 }
 
 .field-error {
   margin: 0;
   font-size: 13px;
-  color: var(--no);
+  font-weight: 700;
+  color: var(--line);
+  background: var(--pop-red);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
+/* The room code is the single most important string in the app -- it's
+   the only way a second person ever gets in. Treated as a cover title. */
 .room-code {
   font-family: var(--font-display);
-  font-size: 42px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 900;
+  font-size: 44px;
+  letter-spacing: 0.12em;
   text-align: center;
-  color: var(--match);
-  margin: 8px 0;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w) solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-hard);
+  padding: 12px 8px;
+  margin: 10px 0;
+  transform: rotate(-1.5deg);
 }
 
 .reclaim-list {
@@ -123,8 +180,10 @@ fieldset.field legend {
 
 .reclaim-note {
   color: var(--text-faint);
-  font-weight: 400;
-  font-size: 12px;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .genre-grid {
@@ -137,14 +196,18 @@ fieldset.field legend {
 .genre-chip {
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px solid var(--ink-edge);
-  background: var(--ink-raised);
-  font-size: 14px;
+  border: var(--ink-w-sm) solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-dim);
 }
 
 .genre-chip--on {
-  color: var(--ink);
-  background: var(--yes);
-  border-color: var(--yes);
+  color: var(--line);
+  background: var(--pop-cyan);
+  box-shadow: var(--shadow-hard-sm);
 }

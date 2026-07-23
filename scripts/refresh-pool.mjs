@@ -40,12 +40,86 @@ function requireEnv(name) {
 // that §12 didn't specify -- see the "stateless paging" note below)
 // ---------------------------------------------------------------------
 
-// §4.1: US flatrate provider ids.
-const PROVIDER_IDS = { netflix: 8, prime: 9, disney: 337, hulu: 15 };
-const PROVIDER_ID_TO_SLUG = Object.fromEntries(
-  Object.entries(PROVIDER_IDS).map(([slug, id]) => [id, slug])
-);
-const ALL_PLATFORMS = Object.keys(PROVIDER_IDS);
+// Eight supported services. TMDB provider IDs are resolved AT RUNTIME
+// by matching these names against TMDB's own /watch/providers/movie
+// list, rather than hardcoded.
+//
+// Hardcoding was the obvious approach and it is a trap. TMDB provider
+// IDs are not stable -- the HBO Max -> Max rebrand changed one out from
+// under everyone -- and a stale ID fails silently: discover simply
+// returns nothing for that service and the deck quietly loses a whole
+// platform with no error anywhere. Matching on name means a rename
+// shows up as a loud warning in the job log instead.
+//
+// Multiple names per service because TMDB splits tiers (ads vs no-ads,
+// and "X Amazon Channel" resellers) into separate providers.
+const PLATFORM_NAMES = {
+  netflix: ['Netflix', 'Netflix Standard with Ads'],
+  prime: ['Amazon Prime Video', 'Amazon Prime Video with Ads'],
+  disney: ['Disney Plus', 'Disney+'],
+  hulu: ['Hulu'],
+  max: ['Max', 'HBO Max', 'Max Amazon Channel'],
+  appletv: ['Apple TV+', 'Apple TV Plus', 'Apple TV+ Amazon Channel'],
+  peacock: ['Peacock Premium', 'Peacock Premium Plus', 'Peacock'],
+  paramount: ['Paramount Plus', 'Paramount+', 'Paramount+ Amazon Channel'],
+};
+
+// Last-known-good IDs, used ONLY if the live lookup fails entirely
+// (TMDB unreachable). Verified for the original four; the rest are
+// best-effort and exist so a network blip degrades to a partial refresh
+// rather than no refresh. The live lookup is the real source of truth.
+const FALLBACK_IDS = { netflix: 8, prime: 9, disney: 337, hulu: 15 };
+
+const ALL_PLATFORMS = Object.keys(PLATFORM_NAMES);
+
+// Filled in by resolveProviderIds() at startup.
+let PROVIDER_IDS = {};          // slug -> [id, ...]
+let PROVIDER_ID_TO_SLUG = {};   // id -> slug
+
+/**
+ * Ask TMDB for its current US provider list and map our slugs onto it
+ * by name. Any service we cannot find is logged loudly -- a silently
+ * missing platform is exactly the failure mode this exists to prevent.
+ */
+async function resolveProviderIds() {
+  let results = [];
+  try {
+    const data = await tmdbGet('/watch/providers/movie', { watch_region: 'US' });
+    results = data.results || [];
+  } catch (err) {
+    console.error(
+      `Could not fetch TMDB provider list (${err.message}). ` +
+      `Falling back to last-known-good IDs -- newer services will be skipped this run.`
+    );
+    PROVIDER_IDS = Object.fromEntries(Object.entries(FALLBACK_IDS).map(([s, id]) => [s, [id]]));
+    PROVIDER_ID_TO_SLUG = Object.fromEntries(Object.entries(FALLBACK_IDS).map(([s, id]) => [id, s]));
+    return;
+  }
+
+  const byName = new Map(results.map((r) => [r.provider_name.trim().toLowerCase(), r.provider_id]));
+
+  for (const [slug, names] of Object.entries(PLATFORM_NAMES)) {
+    const ids = names
+      .map((n) => byName.get(n.trim().toLowerCase()))
+      .filter((id) => id !== undefined);
+
+    if (ids.length === 0) {
+      console.warn(
+        `No TMDB provider matched "${slug}" (tried: ${names.join(', ')}). ` +
+        `This service will contribute no titles until the name is corrected ` +
+        `in PLATFORM_NAMES -- check TMDB's current provider list.`
+      );
+      continue;
+    }
+    PROVIDER_IDS[slug] = ids;
+    for (const id of ids) PROVIDER_ID_TO_SLUG[id] = slug;
+  }
+
+  console.log(
+    'Resolved providers: ' +
+    Object.entries(PROVIDER_IDS).map(([s, ids]) => `${s}=${ids.join('/')}`).join(', ')
+  );
+}
 
 // §4.4: hard exclusions (universal, no room ever wants these) vs. the
 // one genre that's a per-room choice.
@@ -455,8 +529,10 @@ async function runRefreshPhase(genreMap) {
 async function main() {
   const startedAt = Date.now();
 
+  await resolveProviderIds();
+
   const activePlatforms = await getActivePlatforms();
-  const providerIdsCsv = activePlatforms.map((p) => PROVIDER_IDS[p]).filter(Boolean).join('|');
+  const providerIdsCsv = activePlatforms.flatMap((p) => PROVIDER_IDS[p] || []).join('|');
   console.log(`Active platforms: ${activePlatforms.join(', ')}`);
 
   const genreMap = await loadGenreMap();
