@@ -302,3 +302,80 @@ begin
   end if;
   raise notice 'PASS: old identity''s swipes are fully reassigned, none left behind';
 end $$;
+
+-- =====================================================================
+-- Returning members: leaving and coming back must restore history.
+--
+-- Regression cover for a real bug: leave_room() deleted the membership
+-- row, and because the bucket views scope votes to
+-- voted_at >= joined_at, rejoining stamped a fresh joined_at and made
+-- every past swipe invisible to the room.
+-- =====================================================================
+
+do $$
+declare
+  v_code text;
+  v_a uuid := 'a1000000-0000-0000-0000-00000000ee01';
+  v_b uuid := 'a1000000-0000-0000-0000-00000000ee02';
+  v_b2 uuid := 'a1000000-0000-0000-0000-00000000ee03';
+  v_c uuid := 'a1000000-0000-0000-0000-00000000ee04';
+  v_res jsonb;
+  v_n int;
+begin
+  insert into auth.users (id) values (v_a), (v_b), (v_b2), (v_c);
+  insert into titles (tmdb_id, media_type, title) values
+    (700300, 'movie', 'Ret A'), (700301, 'movie', 'Ret B')
+    on conflict do nothing;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select (create_room('Owner', array['netflix'], '4321') -> 'room' ->> 'code') into v_code;
+
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform join_room(v_code, '4321', 'Partner');
+  perform submit_swipe(700300, 'movie', 'right');
+  perform submit_swipe(700301, 'movie', 'right');
+
+  -- Same device: leave and come back.
+  perform leave_room();
+  select join_room(v_code, '4321', 'Partner') into v_res;
+  if (v_res ->> 'restored')::boolean is not true then
+    raise exception 'FAIL: same-device rejoin should be recognised, got %', v_res;
+  end if;
+
+  select count(*) into v_n from user_title_buckets where viewer_id = v_b;
+  if v_n = 0 then
+    raise exception 'FAIL: rejoining wiped the member''s visible history';
+  end if;
+  raise notice 'PASS: same-device rejoin restores history (% bucket rows)', v_n;
+
+  -- New device, same name, different case.
+  perform leave_room();
+  perform set_config('request.jwt.claim.sub', v_b2::text, true);
+  select join_room(v_code, '4321', 'partner') into v_res;
+  if (v_res ->> 'restored')::boolean is not true then
+    raise exception 'FAIL: new device with the same name should be recognised, got %', v_res;
+  end if;
+
+  select count(*) into v_n from swipes where user_id = v_b2;
+  if v_n <> 2 then
+    raise exception 'FAIL: expected 2 swipes moved to the new identity, got %', v_n;
+  end if;
+  select count(*) into v_n from swipes where user_id = v_b;
+  if v_n <> 0 then
+    raise exception 'FAIL: old identity should retain no swipes after transfer, got %', v_n;
+  end if;
+  raise notice 'PASS: new device with same name inherits the old identity''s swipes';
+
+  -- A stranger must NOT be able to claim a seated member by name.
+  perform leave_room();
+  perform set_config('request.jwt.claim.sub', v_c::text, true);
+  select join_room(v_code, '4321', 'Owner') into v_res;
+  if (v_res ->> 'restored')::boolean is true then
+    raise exception 'FAIL: name of a CURRENTLY SEATED member must not be claimable';
+  end if;
+  select count(*) into v_n from swipes where user_id = v_c;
+  if v_n <> 0 then
+    raise exception 'FAIL: stranger inherited swipes they should not have';
+  end if;
+  raise notice 'PASS: a seated member''s name cannot be hijacked';
+end $$;

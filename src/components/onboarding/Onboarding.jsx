@@ -46,6 +46,7 @@ export default function Onboarding({ onComplete }) {
   const [reclaimMembers, setReclaimMembers] = useState([]);
   const [genrePrefs, setGenrePrefs] = useState([]);
   const [userId, setUserId] = useState(null);
+  const [welcomeBack, setWelcomeBack] = useState(null);
 
   const goToGenres = (uid) => {
     setUserId(uid);
@@ -71,7 +72,19 @@ export default function Onboarding({ onComplete }) {
       {step === 'join' && (
         <JoinRoom
           onBack={() => setStep('welcome')}
-          onJoined={(uid) => goToGenres(uid)}
+          onJoined={(uid, res) => {
+            // A returning member already has genre picks and history --
+            // sending them back through onboarding would be asking
+            // questions they have already answered. Confirm the
+            // recognition instead, so it is obvious their swipes came
+            // back rather than silently reappearing.
+            if (res?.restored) {
+              setWelcomeBack(res.restored_swipes ?? 0);
+              setStep('welcomeback');
+              return;
+            }
+            goToGenres(uid);
+          }}
           onRoomFull={async (code, pin) => {
             setPendingJoin({ code, pin });
             try {
@@ -94,6 +107,23 @@ export default function Onboarding({ onComplete }) {
           pendingJoin={pendingJoin}
         />
       )}
+      {step === 'welcomeback' && (
+        <div className="onboard-screen">
+          <h1 className="brand">Welcome back</h1>
+          <p className="onboard-sub">
+            We recognised you from your name and put your history back.
+            {welcomeBack ? ` ${welcomeBack} swipe${welcomeBack === 1 ? '' : 's'} restored.` : ''}
+          </p>
+          <p className="settings__hint">
+            Your matches, your Solo list, and what the deck has learned about
+            you are all where you left them.
+          </p>
+          <button className="onboard-btn onboard-btn--primary" onClick={onComplete}>
+            Pick up where I left off
+          </button>
+        </div>
+      )}
+
       {step === 'genres' && (
         <GenrePicker
           selected={genrePrefs}
@@ -330,7 +360,7 @@ function JoinRoom({ onBack, onJoined, onRoomFull }) {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        onJoined(user.id);
+        onJoined(user.id, res);
       } else if (res.status === 'ROOM_FULL') {
         // §7: offer the reclaim path rather than a flat dead end.
         setError(friendlyError(res.status));
@@ -351,6 +381,11 @@ function JoinRoom({ onBack, onJoined, onRoomFull }) {
         Back
       </button>
       <h1 className="onboard-title">Join a room</h1>
+
+      <p className="settings__hint">
+        Been here before? Use the same name you used last time and your
+        swipes come back with you.
+      </p>
 
       <label className="field">
         Your name
