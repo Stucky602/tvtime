@@ -106,6 +106,8 @@ export default function Onboarding({ onComplete }) {
 }
 
 function Welcome({ onCreate, onJoin }) {
+  const [showHow, setShowHow] = useState(false);
+
   return (
     <div className="onboard-screen">
       <h1 className="brand">FlixPix</h1>
@@ -113,12 +115,101 @@ function Welcome({ onCreate, onJoin }) {
         Swipe on movies and shows together. Match on what you both want, and
         find out what you're free to watch without waiting.
       </p>
+
       <button className="onboard-btn onboard-btn--primary" onClick={onCreate}>
         Create a room
       </button>
       <button className="onboard-btn" onClick={onJoin}>
         Join with a code
       </button>
+
+      {/* Collapsed by default. Someone who already knows what this is
+          shouldn't have to scroll past an explanation to get started,
+          and someone who doesn't gets a real answer in one tap. */}
+      <button className="how-toggle" onClick={() => setShowHow((v) => !v)}>
+        {showHow ? '\u2212' : '+'} How it works
+      </button>
+
+      {showHow && (
+        <div className="how">
+          <ol className="how__steps">
+            <li>
+              <span className="how__num shout">1</span>
+              <div>
+                <h3 className="how__head shout">One of you makes a room</h3>
+                <p>
+                  Pick your streaming services and a 4-digit PIN. You get a
+                  6-character room code.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span className="how__num shout">2</span>
+              <div>
+                <h3 className="how__head shout">The other joins with it</h3>
+                <p>
+                  Send them the code and the PIN. A room holds exactly two
+                  people. Until they join, nothing can match.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span className="how__num shout">3</span>
+              <div>
+                <h3 className="how__head shout">Both of you swipe</h3>
+                <p>
+                  Right for yes, left for pass, or use the buttons. Scroll a
+                  card for the synopsis and a trailer. You don't have to swipe
+                  at the same time or in the same place.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span className="how__num shout">4</span>
+              <div>
+                <h3 className="how__head shout">See where you landed</h3>
+                <p>
+                  <strong>Together</strong> is what you both said yes to.{' '}
+                  <strong>Solo</strong> is what you want and they passed on, so
+                  watch it without waiting. <strong>Pending</strong> is waiting
+                  on them.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span className="how__num shout">5</span>
+              <div>
+                <h3 className="how__head shout">Still can't decide?</h3>
+                <p>
+                  Tonight's Pick runs a quick head-to-head over your matches and
+                  gives you one answer.
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <h3 className="how__head shout how__head--sep">Worth knowing</h3>
+          <ul className="how__notes">
+            <li>
+              It learns as you go. Your first deck comes from the genres you
+              pick; after that it follows your swipes, and what you rate after
+              watching.
+            </li>
+            <li>
+              Swiping left is close to permanent, so a title you pass on won't
+              keep coming back. There's an undo button for a few seconds if you
+              misfire.
+            </li>
+            <li>
+              Filters narrow the deck without reloading it: length, rating,
+              service, anime, genre, decade.
+            </li>
+            <li>
+              New titles arrive overnight, so the deck refreshes on its own.
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

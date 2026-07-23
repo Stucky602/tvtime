@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import Onboarding from './components/onboarding/Onboarding.jsx';
 import SwipeScreen from './components/swipe/SwipeScreen.jsx';
 import Settings from './components/settings/Settings.jsx';
+import TonightsPick from './components/tabs/TonightsPick.jsx';
+import Stats from './components/tabs/Stats.jsx';
+import { fetchTogether } from './lib/tabs.js';
 import { TogetherTab, SoloTab, PendingTab } from './components/tabs/TabPages.jsx';
 import TabBar from './components/tabs/TabBar.jsx';
 import { ensureSession, isConfigured } from './lib/supabase.js';
@@ -27,6 +30,8 @@ export default function App() {
   const [roomState, setRoomState] = useState(null);
   const [tab, setTab] = useState('swipe');
   const [showSettings, setShowSettings] = useState(false);
+  const [overlay, setOverlay] = useState(null); // 'pick' | 'stats' | null
+  const [pickCandidates, setPickCandidates] = useState([]);
   const [devMode, setDevMode] = useState(false);
 
   useEffect(() => {
@@ -113,6 +118,31 @@ export default function App() {
 
   const { room, user, partner } = roomState;
 
+  if (overlay === 'pick') {
+    return (
+      <div className="app">
+        <TonightsPick
+          candidates={pickCandidates}
+          roomPlatforms={roomState.room.platforms}
+          onClose={() => setOverlay(null)}
+        />
+      </div>
+    );
+  }
+
+  if (overlay === 'stats') {
+    return (
+      <div className="app">
+        <Stats
+          room={roomState.room}
+          user={roomState.user}
+          partner={roomState.partner}
+          onClose={() => setOverlay(null)}
+        />
+      </div>
+    );
+  }
+
   if (showSettings) {
     return (
       <div className="app">
@@ -142,9 +172,23 @@ export default function App() {
           partner={partner}
           devMode={devMode}
           onOpenSettings={() => setShowSettings(true)}
+          onOpenStats={() => setOverlay('stats')}
         />
       )}
-      {tab === 'together' && <TogetherTab roomId={room.id} />}
+      {tab === 'together' && (
+        <TogetherTab
+          roomId={room.id}
+          roomPlatforms={room.platforms}
+          onTonightsPick={async () => {
+            try {
+              setPickCandidates(await fetchTogether());
+            } catch {
+              setPickCandidates([]);
+            }
+            setOverlay('pick');
+          }}
+        />
+      )}
       {tab === 'solo' && <SoloTab roomId={room.id} />}
       {tab === 'pending' && <PendingTab roomId={room.id} />}
 

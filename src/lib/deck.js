@@ -22,6 +22,7 @@
 import { CONFIG } from './config.js';
 import {
   genreAffinities,
+  verdictAffinities,
   makePopularityNormalizer,
   scoreTitle,
   jointAffinity,
@@ -60,7 +61,7 @@ export function seededRng(seedStr) {
  * Builds the scoring context for one user: their smoothed genre
  * affinities plus the set of titles their partner has already voted on.
  */
-function buildContext(user, allSwipes, titlesByKey, candidates, partnerId) {
+function buildContext(user, allSwipes, titlesByKey, candidates, partnerId, watchedRows) {
   const ownSwipes = allSwipes.filter((s) => s.user_id === user.id);
   const { affinities, globalRightRate } = genreAffinities(
     ownSwipes,
@@ -86,6 +87,10 @@ function buildContext(user, allSwipes, titlesByKey, candidates, partnerId) {
     affinities,
     globalRightRate,
     partnerVotedKeys,
+    // Room-scoped, so both members' verdicts feed both decks. That is
+    // correct: "we watched this and didn't like it" is a shared fact,
+    // not a private one.
+    verdictAffinities: verdictAffinities(watchedRows, titlesByKey),
     popularityNorm: makePopularityNormalizer(candidates),
     currentYear: new Date().getFullYear(),
   };
@@ -220,6 +225,7 @@ export function buildDeck({
   partner,
   roomId,
   historyTitles = [],
+  watchedRows = [],
   hasFinishedSeed = false,
   rng = Math.random,
 }) {
@@ -232,7 +238,7 @@ export function buildDeck({
     if (!titlesByKey.has(key(t))) titlesByKey.set(key(t), t);
   }
 
-  const ctx = buildContext(user, allSwipes, titlesByKey, candidates, partner?.id);
+  const ctx = buildContext(user, allSwipes, titlesByKey, candidates, partner?.id, watchedRows);
 
   // ---- SEED phase (§5.4) ----
   if (!hasFinishedSeed && partner) {
@@ -267,7 +273,7 @@ export function buildDeck({
 
   let spine = [];
   if (spineCount > 0 && partner) {
-    const ctxPartner = buildContext(partner, allSwipes, titlesByKey, candidates, user.id);
+    const ctxPartner = buildContext(partner, allSwipes, titlesByKey, candidates, user.id, watchedRows);
     // Ranked by joint affinity and served to BOTH users -- this is the
     // deterministic overlap guarantee. No jitter here: if the two phones
     // computed different spines, the guarantee would evaporate.

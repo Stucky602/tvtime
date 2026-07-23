@@ -211,3 +211,89 @@ fieldset.field legend { padding: 0 0 6px; }
   background: var(--pop-cyan);
   box-shadow: var(--shadow-hard-sm);
 }
+
+/* ---- How it works (landing page) ---- */
+
+.how-toggle {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 10px 0;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pop-cyan);
+}
+
+.how {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--panel);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.how__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.how__steps li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.how__num {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 17px;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+}
+
+.how__head {
+  margin: 0 0 3px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.how__head--sep {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: var(--ink-w-sm) solid var(--line);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--pop-cyan);
+}
+
+.how p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.how__notes {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}

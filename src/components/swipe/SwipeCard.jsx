@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { posterUrl } from '../../lib/config.js';
+import { watchTarget, trailerEmbedUrl } from '../../lib/links.js';
 
 // FlixPix card.
 //
@@ -25,9 +26,13 @@ export default function SwipeCard({
   dy = 0,
   dragging = false,
   isNext = false,
+  roomPlatforms = [],
 }) {
   const [posterFailed, setPosterFailed] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const poster = posterUrl(title.poster_path, 'w780');
+  const trailer = trailerEmbedUrl(title.trailer_key);
+  const watch = watchTarget(title, roomPlatforms);
 
   const rotation = Math.max(-12, Math.min(12, dx / 14));
   const verdict = dx > 40 ? 'yes' : dx < -40 ? 'no' : null;
@@ -53,7 +58,15 @@ export default function SwipeCard({
           vertical scrolling here while the deck owns horizontal swipes. */}
       <div className="card__scroll">
         <div className="card__art">
-          {poster && !posterFailed ? (
+          {playing && trailer ? (
+            <iframe
+              className="card__trailer"
+              src={trailer}
+              title={`${title.title} trailer`}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          ) : poster && !posterFailed ? (
             <img src={poster} alt="" draggable="false" onError={() => setPosterFailed(true)} />
           ) : (
             <div className="card__noart">
@@ -81,7 +94,36 @@ export default function SwipeCard({
             </p>
           </div>
 
-          {!isNext && (
+          {!isNext && !playing && trailer && (
+            <button
+              className="card__play shout"
+              // Stop the tap being read as the start of a drag.
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlaying(true);
+              }}
+              aria-label={`Play ${title.title} trailer`}
+            >
+              ▶ Trailer
+            </button>
+          )}
+
+          {!isNext && playing && (
+            <button
+              className="card__play card__play--stop shout"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlaying(false);
+              }}
+              aria-label="Close trailer"
+            >
+              ✕ Close
+            </button>
+          )}
+
+          {!isNext && !playing && (
             <span className="card__scrollcue" aria-hidden="true">
               Scroll for details
             </span>
@@ -99,6 +141,18 @@ export default function SwipeCard({
                 ))}
               </ul>
             </>
+          )}
+          {!isNext && watch && (
+            <a
+              className="watch-btn shout"
+              href={watch.url}
+              target="_blank"
+              rel="noreferrer"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {watch.label}
+            </a>
           )}
         </div>
       </div>

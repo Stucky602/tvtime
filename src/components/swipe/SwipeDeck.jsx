@@ -65,7 +65,7 @@ import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } fro
 // the instantaneous flick is what the user actually did.
 const VELOCITY_WINDOW_MS = 80;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [] }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -318,7 +318,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   return (
     <div className="deck">
       <div className="deck__stack" ref={stackRef}>
-        {next && <SwipeCard title={next} isNext dx={drag.dx} />}
+        {next && <SwipeCard title={next} isNext dx={drag.dx} roomPlatforms={roomPlatforms} />}
         <div
           className="deck__hit"
           onPointerDown={onPointerDown}

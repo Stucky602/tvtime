@@ -9,24 +9,27 @@ import { fetchTogether, fetchSolo, fetchPending } from '../../lib/tabs.js';
 // transitions attach to, and it keeps the copy for each empty state
 // next to the tab it belongs to instead of in a lookup table.
 
-export function TogetherTab({ roomId }) {
+export function TogetherTab({ roomId, roomPlatforms, onTonightsPick }) {
   return (
     <TabScreen
       title="Together"
       fetcher={fetchTogether}
       roomId={roomId}
+      roomPlatforms={roomPlatforms}
+      onTonightsPick={onTonightsPick}
       emptyHead="Nothing yet"
       emptyBody="When you both swipe right on the same title, it shows up here."
     />
   );
 }
 
-export function SoloTab({ roomId }) {
+export function SoloTab({ roomId, roomPlatforms }) {
   return (
     <TabScreen
       title="Solo"
       fetcher={fetchSolo}
       roomId={roomId}
+      roomPlatforms={roomPlatforms}
       emptyHead="Nothing here yet"
       emptyBody="Titles you're into that your partner passed on land here -- watch these without waiting."
     />

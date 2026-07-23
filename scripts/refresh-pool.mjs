@@ -127,6 +127,12 @@ const HARD_EXCLUDE_TV_GENRES = [10763, 10767, 10766]; // News, Talk, Soap
 const REALITY_TV_GENRE = 10764;
 const TV_MAX_EPISODES = 300;
 
+// TMDB keyword id for "anime". This is the authoritative signal --
+// TMDB has no anime genre, and the trait cuts across genres, so it
+// can't be derived from `genres` at all.
+const ANIME_KEYWORD_ID = 210024;
+const TMDB_ANIMATION_GENRE = 16;
+
 // §4.4 / §5.1 slice rules.
 const BACKCATALOG_VOTE_FLOOR = 500;
 const TV_POPULAR_VOTE_FLOOR = 200; // movies get no floor here -- §4.4: "Movies need none of this."
@@ -344,7 +350,8 @@ async function discoverPage(mediaType, slice, providerIdsCsv, page) {
 
 async function fetchDetail(mediaType, tmdbId) {
   const path = mediaType === 'movie' ? `/movie/${tmdbId}` : `/tv/${tmdbId}`;
-  return tmdbGet(path, { append_to_response: 'watch/providers' });
+  // keywords rides along on the same request -- no extra API call.
+  return tmdbGet(path, { append_to_response: 'watch/providers,keywords' });
 }
 
 function extractProviders(detail) {
@@ -361,6 +368,27 @@ function extractProviders(detail) {
     if (slug) slugs.add(slug);
   }
   return Array.from(slugs);
+}
+
+/**
+ * Anime detection. Keyword first (authoritative), then a language +
+ * Animation heuristic for older titles that predate consistent keyword
+ * tagging.
+ *
+ * TMDB returns keywords under different shapes per media type: movies
+ * use `keywords.keywords`, TV uses `keywords.results`. Getting this
+ * wrong fails silently -- every title reads as non-anime -- so both are
+ * handled explicitly rather than assumed.
+ */
+function detectAnime(mediaType, detail, rawGenreIds) {
+  const kw = detail.keywords || {};
+  const list = kw.keywords || kw.results || [];
+  if (list.some((k) => k.id === ANIME_KEYWORD_ID)) return true;
+
+  return (
+    detail.original_language === 'ja' &&
+    rawGenreIds.includes(TMDB_ANIMATION_GENRE)
+  );
 }
 
 function extractYear(dateStr) {
@@ -413,6 +441,7 @@ function titleRowFromDetail(mediaType, detail, genreMap) {
     detail_updated_at: now,
     excluded: hasHardExcludedGenre || tooManyEpisodes,
     is_reality: isReality,
+    is_anime: detectAnime(mediaType, detail, genreIds),
   };
 }
 

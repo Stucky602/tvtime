@@ -32,6 +32,13 @@ export const CONFIG = {
   // ---- Scoring weights (§5.2) ----
   W_PARTNER: 3.0,
   W_GENRE: 1.0,
+  // Post-watch thumbs. Weighted just above genre affinity because it is
+  // a strictly better signal ("we enjoyed this" vs "this looks
+  // interesting") -- but not dramatically higher, since it is scarce
+  // and shouldn't let two or three ratings dominate hundreds of swipes.
+  // Unlike the others this term is signed, so it can demote as well as
+  // promote.
+  W_VERDICT: 1.2,
   W_QUALITY: 0.5,
   W_POP: 0.4,
   W_RECENCY: 0.2,

@@ -14,7 +14,7 @@ import { fetchWatched } from '../../lib/tabs.js';
 // what's watched (that's a separate table), so the split happens here
 // on the client after both queries return.
 
-export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId }) {
+export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId, roomPlatforms, onTonightsPick }) {
   const [rows, setRows] = useState(null);
   const [watchedKeys, setWatchedKeys] = useState(new Map());
   const [watchedOpen, setWatchedOpen] = useState(false);
@@ -76,6 +76,12 @@ export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId
     <div className="tabscreen">
       <h1 className="tabscreen__title">{title}</h1>
 
+      {onTonightsPick && active.length >= 2 && (
+        <button className="onboard-btn onboard-btn--primary pick-cta" onClick={onTonightsPick}>
+          Tonight's Pick
+        </button>
+      )}
+
       {active.length === 0 && watched.length === 0 && (
         <div className="tabscreen__empty">
           <p className="empty__head">{emptyHead}</p>
@@ -90,6 +96,7 @@ export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId
               key={`${t.tmdb_id}:${t.media_type}`}
               title={t}
               roomId={roomId}
+              roomPlatforms={roomPlatforms}
               watched={false}
               onWatchedChange={(v) => handleWatchedChange(`${t.tmdb_id}:${t.media_type}`, v)}
             />

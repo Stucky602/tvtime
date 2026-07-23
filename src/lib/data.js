@@ -30,7 +30,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   const [{ data: swipes, error: swipeErr }, { data: watched, error: watchedErr }] =
     await Promise.all([
       supabase.from('swipes').select('user_id,tmdb_id,media_type,direction,voted_at'),
-      supabase.from('watched').select('tmdb_id,media_type'),
+      supabase.from('watched').select('tmdb_id,media_type,verdict'),
     ]);
   if (swipeErr) throw swipeErr;
   if (watchedErr) throw watchedErr;
@@ -76,10 +76,16 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   // (they've been voted on). Fetch them separately, capped -- affinity
   // converges long before a user has 400 swipes, so there's no value in
   // pulling an unbounded history.
+  // Watched titles are included here too: verdict scoring needs their
+  // genres, and a watched title has by definition been swiped, so it is
+  // absent from `candidates`.
   const votedKeys = [...ownVoted].slice(0, 400);
   let historyTitles = [];
-  if (votedKeys.length > 0) {
-    const ids = [...new Set(votedKeys.map((k) => Number(k.split(':')[0])))];
+  const watchedIds = (watched || []).map((w) => w.tmdb_id);
+  if (votedKeys.length > 0 || watchedIds.length > 0) {
+    const ids = [
+      ...new Set([...votedKeys.map((k) => Number(k.split(':')[0])), ...watchedIds]),
+    ];
     const { data: hist } = await supabase
       .from('titles')
       .select('tmdb_id,media_type,genres')
@@ -87,7 +93,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
     historyTitles = hist || [];
   }
 
-  return { candidates, allSwipes: swipes || [], historyTitles };
+  return { candidates, allSwipes: swipes || [], historyTitles, watchedRows: watched || [] };
 }
 
 // ---------------------------------------------------------------------
@@ -244,7 +250,7 @@ export function persistSeedSet(roomId, userId, keys) {
 
 /** Full stage-2 build: fetch inputs, score, assemble, cache. */
 export async function buildAndCacheDeck({ room, user, partner }) {
-  const { candidates, allSwipes, historyTitles } = await fetchDeckInputs({
+  const { candidates, allSwipes, historyTitles, watchedRows } = await fetchDeckInputs({
     userId: user.id,
     platforms: room.platforms,
     includeReality: room.include_reality,
@@ -289,6 +295,7 @@ export async function buildAndCacheDeck({ room, user, partner }) {
     partner,
     roomId: room.id,
     historyTitles,
+    watchedRows,
     hasFinishedSeed,
   });
 

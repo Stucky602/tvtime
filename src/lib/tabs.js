@@ -13,7 +13,7 @@ const BUCKET_COLUMNS =
   'tmdb_id,media_type,viewer_direction,bucket,rights,lefts,total_votes,member_count';
 
 const TITLE_COLUMNS =
-  'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,providers';
+  'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,providers,watch_link,trailer_key';
 
 /**
  * Fetches one bucket's rows plus the title data to render them, joined

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { posterUrl, CONFIG } from '../../lib/config.js';
 import { markWatched, unmarkWatched } from '../../lib/tabs.js';
+import { watchTarget } from '../../lib/links.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §2.4, §6 (gesture fallback pattern)
 //
@@ -10,7 +11,7 @@ import { markWatched, unmarkWatched } from '../../lib/tabs.js';
 // not a secondary option, it's the documented alternative, same as the
 // Pass/Yes buttons in the swipe deck.
 
-export default function TitleListItem({ title, roomId, watched = false, verdict, onWatchedChange }) {
+export default function TitleListItem({ title, roomId, roomPlatforms = [], watched = false, verdict, onWatchedChange }) {
   const [dy, setDy] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -97,6 +98,20 @@ export default function TitleListItem({ title, roomId, watched = false, verdict,
         {title.providers?.length > 0 && (
           <p className="row__providers">{title.providers.join(', ')}</p>
         )}
+        {(() => {
+          const t = watchTarget(title, roomPlatforms);
+          return t ? (
+            <a
+              className="row__watch"
+              href={t.url}
+              target="_blank"
+              rel="noreferrer"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {t.label}
+            </a>
+          ) : null;
+        })()}
         {watched && verdict && (
           <p className={`row__verdict row__verdict--${verdict}`}>
             {verdict === 'up' ? 'Liked it' : 'Not for us'}

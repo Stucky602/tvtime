@@ -19,7 +19,7 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -133,6 +133,9 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
             {pendingSync} swipe{pendingSync === 1 ? '' : 's'} syncing…
           </span>
         )}
+        <button className="gear" onClick={onOpenStats} aria-label="Stats">
+          Stats
+        </button>
         <button className="gear" onClick={onOpenSettings} aria-label="Settings">
           Settings
         </button>
@@ -167,6 +170,7 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           cards={filteredCards}
           debugByKey={deck?.debugByKey}
           devMode={devMode}
+          roomPlatforms={room.platforms}
           onCardResolved={(t) => addSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onCardUndone={(t) => removeSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onExhausted={() => {}}

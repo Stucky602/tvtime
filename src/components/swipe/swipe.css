@@ -586,3 +586,60 @@
   text-transform: uppercase;
   color: var(--pop-cyan);
 }
+
+/* ---- Trailer + watch link (features 2 and 4) ---- */
+
+.card__trailer {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #000;
+}
+
+.card__play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-2deg);
+  z-index: 3;
+  font-size: 15px;
+  padding: 12px 20px;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w) solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.card__play:active {
+  transform: translate(-50%, -50%) rotate(-2deg) scale(0.96);
+}
+
+.card__play--stop {
+  top: auto;
+  bottom: 12px;
+  left: auto;
+  right: 12px;
+  transform: none;
+  font-size: 12px;
+  padding: 8px 14px;
+  background: var(--paper);
+}
+
+.card__play--stop:active { transform: translate(2px, 2px); }
+
+.watch-btn {
+  display: block;
+  margin-top: 16px;
+  text-align: center;
+  text-decoration: none;
+  min-height: var(--tap);
+  line-height: 44px;
+  font-size: 14px;
+  color: var(--line);
+  background: var(--pop-cyan);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}

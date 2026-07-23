@@ -161,6 +161,69 @@ export function recency(title, currentYear = new Date().getFullYear()) {
  * has not, else 0." The term that resolves Pending into Together/Solo
  * instead of letting two people swipe past each other for weeks.
  */
+/**
+ * VERDICT AFFINITY -- closing the learning loop.
+ *
+ * The post-watch thumbs collected by the §2.4 toast have been
+ * accumulating with nothing reading them. That was a deliberate v1
+ * decision (collect now, consume later); this is "later".
+ *
+ * Why a separate term rather than folding into genre affinity: a right
+ * swipe means "this LOOKS interesting" -- a judgement about a poster
+ * and one line of synopsis. A post-watch thumb means "we actually
+ * enjoyed this" -- a judgement about the thing itself. The second is
+ * strictly better, but arrives far more rarely, which is exactly why it
+ * can't just replace the first.
+ *
+ * Returns a per-genre score centred on 0:
+ *    > 0  genres you liked once you'd actually watched them
+ *    < 0  genres that looked good and then disappointed you
+ *
+ * Smoothing is heavier than the swipe model (alpha 2 against very few
+ * data points) because verdicts are scarce: one thumbs-down on the only
+ * horror film you've finished should nudge, not condemn the genre.
+ */
+export function verdictAffinities(watchedRows, titlesByKey) {
+  const up = new Map();
+  const total = new Map();
+
+  for (const w of watchedRows || []) {
+    if (w.verdict !== 'up' && w.verdict !== 'down') continue; // unrated: no signal
+    const title = titlesByKey.get(`${w.tmdb_id}:${w.media_type}`);
+    if (!title) continue;
+    for (const g of title.genres || []) {
+      total.set(g, (total.get(g) || 0) + 1);
+      if (w.verdict === 'up') up.set(g, (up.get(g) || 0) + 1);
+    }
+  }
+
+  const alpha = 2;
+  const out = new Map();
+  for (const g of total.keys()) {
+    const u = up.get(g) || 0;
+    const n = total.get(g) || 0;
+    // Laplace-smoothed toward 0.5 (neutral), then recentred to [-1, 1].
+    const rate = (u + alpha * 0.5) / (n + alpha);
+    out.set(g, (rate - 0.5) * 2);
+  }
+  return out;
+}
+
+/** Mean verdict affinity across a title's genres. 0 when unknown. */
+export function verdictAffinityForTitle(title, verdictAff) {
+  const genres = title.genres || [];
+  if (!genres.length || !verdictAff || verdictAff.size === 0) return 0;
+  let sum = 0;
+  let seen = 0;
+  for (const g of genres) {
+    if (verdictAff.has(g)) {
+      sum += verdictAff.get(g);
+      seen++;
+    }
+  }
+  return seen === 0 ? 0 : sum / seen;
+}
+
 export function partnerPending(title, partnerVotedKeys) {
   return partnerVotedKeys.has(`${title.tmdb_id}:${title.media_type}`) ? 1 : 0;
 }
@@ -182,6 +245,9 @@ export function scoreTitle(title, ctx, rng = Math.random) {
   const terms = {
     partner: partnerPending(title, ctx.partnerVotedKeys),
     genre: genreAffinityForTitle(title, ctx.affinities, ctx.globalRightRate),
+    // Signed, unlike every other term: this one can push a title DOWN,
+    // which is the whole point of learning from disappointment.
+    verdict: verdictAffinityForTitle(title, ctx.verdictAffinities),
     quality: quality(title),
     pop: ctx.popularityNorm(title),
     recency: recency(title, ctx.currentYear),
@@ -192,6 +258,7 @@ export function scoreTitle(title, ctx, rng = Math.random) {
   const total =
     CONFIG.W_PARTNER * terms.partner +
     CONFIG.W_GENRE * terms.genre +
+    CONFIG.W_VERDICT * terms.verdict +
     CONFIG.W_QUALITY * terms.quality +
     CONFIG.W_POP * terms.pop +
     CONFIG.W_RECENCY * terms.recency +
