@@ -38,7 +38,10 @@
   grid-template-rows: minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
   place-items: stretch;
-  overflow: visible; /* hard shadows must not be clipped */
+  /* Safe to leave visible (so the hard offset shadows aren't clipped)
+     now that html/body use overflow-x: clip -- a dragged card can
+     overhang without making the page itself scrollable. */
+  overflow: visible;
 }
 
 .deck__stack > .card--next {
@@ -79,6 +82,11 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Vertical panning belongs to this scroller; horizontal is the
+     deck's. Declared here as well as on .deck__hit so the browser has
+     an unambiguous answer on the element actually being touched. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -89,17 +97,26 @@
 .card__art {
   position: relative;
   width: 100%;
-  /* Real posters are 2:3. Honouring that is the whole point of this
-     rewrite -- the old layout forced the poster into whatever vertical
-     space was left and cropped the difference. */
-  aspect-ratio: 2 / 3;
-  background: #000;
+  /* Exactly the height of the scroll viewport, so the poster fills the
+     card on arrival and the details sit just below the fold.
+     Previously this was `aspect-ratio: 2/3`, which made the art box
+     TALLER than the card on most screens -- so the poster arrived
+     pre-cropped, cut off mid-title, which is what looked broken. */
+  height: 100%;
+  min-height: 100%;
+  background: var(--ink);
+  background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.05) 1.5px, transparent 0);
+  background-size: 10px 10px;
 }
 
 .card__art img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* `contain`, not `cover`. Posters are 2:3 and the card viewport is
+     wider than that, so cover would crop roughly a third off the
+     vertical -- and posters put their title at the bottom, which is
+     exactly what got chopped. contain shows the entire poster. */
+  object-fit: contain;
   display: block;
 }
 
@@ -142,8 +159,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 40px 14px 14px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 30%, transparent);
+  padding: 44px 14px 14px;
+  background: linear-gradient(to top, rgba(16, 17, 26, 0.96) 42%, transparent);
 }
 
 .card__title {

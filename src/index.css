@@ -76,6 +76,20 @@ html,
 body,
 #root {
   height: 100%;
+  /* THE FIX for "swiping just drags the whole screen".
+     The card is moved with transform: translateX(), so a dragged card
+     extends past the right edge of the viewport. That made the PAGE
+     horizontally scrollable, and the browser then panned the whole
+     document instead of letting the swipe handler do its job -- which
+     is why the header, banner, buttons and tab bar all slid sideways
+     together.
+     `clip` rather than `hidden`: hidden would turn these into scroll
+     containers (which reintroduces the same problem one level up and
+     breaks position: fixed children), whereas clip just clips. */
+  overflow-x: clip;
+  /* Belt and braces: kill horizontal rubber-banding too, so no part of
+     a sideways gesture reaches the document. */
+  overscroll-behavior-x: none;
 }
 
 body {
@@ -99,6 +113,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow-x: clip;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
