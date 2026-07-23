@@ -3,7 +3,7 @@ import SwipeCard from './SwipeCard.jsx';
 import { CONFIG } from '../../lib/config.js';
 import { submitSwipe, undoSwipe } from '../../lib/data.js';
 import { hapticThreshold, hapticCommit, hapticUndo, hapticMatch } from '../../lib/haptics.js';
-import { classifyGesture, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
+import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §6 (whole section), §5.3, §9
 //
@@ -85,9 +85,13 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
     startX: 0,
     startY: 0,
     startT: 0,
+    // Locked ONCE at SWIPE_AXIS_LOCK_PX of travel, then permanent for
+    // the life of this touch. 'y' means the card is inert -- it cannot
+    // move or vote regardless of what the finger does afterwards.
+    axis: null,
     // 'pending'  -- touching, but not yet established as a swipe
     // 'dragging' -- confirmed horizontal drag, card follows the finger
-    // 'aborted'  -- clearly vertical, ignore until release
+    // 'inert'    -- vertical gesture; nothing this touch does matters
     phase: 'idle',
     sampleX: 0,
     sampleT: 0,
@@ -189,6 +193,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
       startX: e.clientX,
       startY: e.clientY,
       startT: performance.now(),
+      axis: null,
       phase: 'pending',
       sampleX: e.clientX,
       sampleT: performance.now(),
@@ -199,21 +204,29 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
 
   const onPointerMove = (e) => {
     const g = gesture.current;
-    if (g.id !== e.pointerId || g.phase === 'idle' || g.phase === 'aborted') return;
+    if (g.id !== e.pointerId || g.phase === 'idle' || g.phase === 'inert') return;
 
     const rawDx = e.clientX - g.startX;
     const rawDy = e.clientY - g.startY;
 
-    if (g.phase === 'pending') {
-      // Dead zone + direction lock, both in lib/gesture.js so they can
-      // be tested against the real reported scenario. 'pending' means
-      // the card does NOT move -- no visual response at all to a touch
-      // that hasn't committed to being a drag.
-      const phase = classifyGesture(rawDx, rawDy);
-      if (phase === 'pending') return;
-      g.phase = phase; // 'dragging' or 'aborted'
-      if (phase === 'aborted') return;
+    // Decide the axis exactly once, then never revisit it. Re-deriving
+    // direction on every move is what let a vertical scroll drift into
+    // a swipe and throw the card.
+    if (g.axis === null) {
+      const axis = lockAxis(rawDx, rawDy);
+      if (axis === null) return; // undecided; card stays completely still
+      g.axis = axis;
+      if (axis === 'y') {
+        // Vertical, permanently. Nothing else this touch does can move
+        // or vote on the card.
+        g.phase = 'inert';
+        return;
+      }
     }
+
+    const state = dragState(g.axis, rawDx);
+    if (state !== 'dragging') return; // inside the dead zone; card inert
+    g.phase = 'dragging';
 
     // Trailing-window velocity sample.
     const now = performance.now();
@@ -222,9 +235,12 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
       g.sampleT = now;
     }
 
-    // Vertical travel is damped hard: this is a horizontal gesture, and
-    // letting the card follow a finger vertically makes it feel loose.
-    const dy = rawDy * 0.25;
+    // The card no longer follows the finger vertically AT ALL. It used
+    // to track dy * 0.25, which meant a mostly-vertical drag still
+    // visibly dragged the card around -- reinforcing the impression
+    // that a vertical gesture was doing something to it. Horizontal
+    // gestures move the card horizontally; that is the whole vocabulary.
+    const dy = 0;
 
     // One light tick the moment the card passes the commit threshold, so
     // you can feel where the line is without watching the screen.
@@ -239,7 +255,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
     setDrag({ dx: rawDx, dy, active: true });
   };
 
-  const onPointerUp = (e) => {
+  const onPointerUp = (e, cancelled = false) => {
     const g = gesture.current;
     if (g.id !== e.pointerId) return;
 
@@ -250,16 +266,19 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
     const elapsed = Math.max(16, performance.now() - g.sampleT);
     const velocity = Math.abs(e.clientX - g.sampleX) / elapsed;
 
-    gesture.current = { ...g, id: null, phase: 'idle' };
+    gesture.current = { ...g, id: null, axis: null, phase: 'idle' };
     crossedThreshold.current = false;
 
-    if (!wasDragging) {
-      // Tap, or an aborted vertical gesture. Never votes.
+    if (!wasDragging || cancelled) {
+      // A tap, a vertical gesture, or -- critically -- a pointercancel.
+      // Cancel means the BROWSER took the gesture over to scroll, not
+      // that the user finished a swipe. Treating cancel like a normal
+      // release is how holding and scrolling ended up throwing the card.
       setDrag({ dx: 0, dy: 0, active: false });
       return;
     }
 
-    if (shouldCommit({ dx, velocity, cardWidth: cardWidth(), phase: 'dragging' })) {
+    if (shouldCommit({ dx, velocity, cardWidth: cardWidth(), phase: 'dragging', cancelled })) {
       commit(swipeDirection(dx));
     } else {
       setDrag({ dx: 0, dy: 0, active: false });
@@ -303,7 +322,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onExhaust
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerCancel={(e) => onPointerUp(e, true)}
         >
           <SwipeCard
             title={current}

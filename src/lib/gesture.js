@@ -1,12 +1,38 @@
-// Update 1: the swipe gesture decision logic, extracted as pure
-// functions.
+// Update 1 + 6: the swipe gesture decision logic, as pure functions.
 //
-// This lives outside the React component on purpose. The reported bug --
-// "barely touching the screen" casting a vote -- was a logic error in
-// three numbers and one boolean operator, and there was no way to test
-// it while it was buried in pointer event handlers. Now the actual
-// decisions are pure functions over (dx, dy, velocity, cardWidth), and
-// gesture.test.mjs runs the real reported scenario against them.
+// This lives outside the React component on purpose. Both gesture bugs
+// so far ("barely touching votes", then "scrolling vertically votes")
+// were logic errors of a few lines each, and neither was testable while
+// buried in pointer event handlers. Now the decisions are pure functions
+// and gesture.test.mjs runs both reported scenarios against them.
+//
+// ---------------------------------------------------------------------
+// THE MODEL: lock the axis once, then honour it absolutely
+// ---------------------------------------------------------------------
+// A touch goes through exactly three states:
+//
+//   1. UNDECIDED -- finger is down but has travelled less than
+//      SWIPE_AXIS_LOCK_PX. The card does not move. Nothing can vote.
+//
+//   2. AXIS LOCKED -- at SWIPE_AXIS_LOCK_PX of total travel we decide,
+//      ONCE, whether this is a horizontal or a vertical gesture. That
+//      decision is permanent for the life of the touch.
+//
+//        'y' -> the card is inert for the rest of this touch. It will
+//               not move, tilt, or vote, no matter what happens next.
+//        'x' -> a swipe, once it also clears the dead zone.
+//
+//   3. DRAGGING -- horizontal, past the dead zone, card follows the
+//      finger.
+//
+// The previous version re-evaluated direction on every move while
+// undecided, which is what caused the vertical-scroll bug: a gesture
+// that was clearly vertical could later drift far enough horizontally
+// to flip into 'dragging', with no path back. Deciding once and never
+// revisiting removes that whole class of failure.
+//
+// A 45-degree diagonal deliberately locks VERTICAL. When intent is
+// ambiguous the safe default is "don't cast an irreversible vote."
 
 import { CONFIG } from './config.js';
 
@@ -22,25 +48,38 @@ export function commitDistance(cardWidth) {
 }
 
 /**
- * Should a still-in-progress touch be treated as a horizontal swipe yet?
+ * Decide the gesture's axis, once. Returns:
  *
- * Returns one of:
- *   'pending'  -- keep watching, card must NOT move
- *   'dragging' -- confirmed horizontal drag
- *   'aborted'  -- clearly vertical, this pointer will never vote
+ *   null -- not enough travel yet to tell; stay undecided, card inert
+ *   'x'  -- horizontal gesture, may become a swipe
+ *   'y'  -- vertical gesture, inert for the rest of this touch
  *
- * The dead zone is what actually fixes the reported bug: below it the
- * card doesn't move and no vote is possible, so a tap with a few pixels
- * of thumb drift is inert.
+ * Call this ONLY while the axis is still null, then store the result for
+ * the life of the pointer. Re-deriving it on later moves is exactly what
+ * caused the vertical-scroll bug.
  */
-export function classifyGesture(dx, dy) {
+export function lockAxis(dx, dy) {
   const absDx = Math.abs(dx);
   const absDy = Math.abs(dy);
 
-  if (absDy > CONFIG.SWIPE_VERTICAL_ABORT_PX && absDy > absDx) return 'aborted';
-  if (absDx < CONFIG.SWIPE_DEAD_ZONE_PX) return 'pending';
-  if (absDx < absDy * CONFIG.SWIPE_DIRECTION_LOCK) return 'pending';
-  return 'dragging';
+  if (Math.hypot(dx, dy) < CONFIG.SWIPE_AXIS_LOCK_PX) return null;
+
+  // Horizontal has to clearly win, not merely tie. Anything ambiguous
+  // (including a straight 45-degree diagonal) is treated as vertical.
+  return absDx > absDy * CONFIG.SWIPE_DIRECTION_LOCK ? 'x' : 'y';
+}
+
+/**
+ * Given an already-locked axis, is the card being dragged yet?
+ *
+ *   'inert'    -- vertical axis; this touch can never move or vote
+ *   'pending'  -- horizontal but still inside the dead zone
+ *   'dragging' -- horizontal and past the dead zone
+ */
+export function dragState(axis, dx) {
+  if (axis === 'y') return 'inert';
+  if (axis !== 'x') return 'pending';
+  return Math.abs(dx) >= CONFIG.SWIPE_DEAD_ZONE_PX ? 'dragging' : 'pending';
 }
 
 /**
@@ -53,10 +92,17 @@ export function classifyGesture(dx, dy) {
  *
  * A fling still commits early, but has to actually travel
  * SWIPE_FLING_MIN_PX first -- the old code let it fire at 30px.
+ *
+ * `cancelled` is the second gesture fix. A pointercancel means the
+ * BROWSER took the gesture away (it decided to scroll instead), not that
+ * the user finished a swipe. The old code wired pointercancel straight
+ * to the same handler as pointerup, so a browser-initiated scroll cast a
+ * vote. A cancelled pointer can never commit, full stop.
  */
-export function shouldCommit({ dx, velocity, cardWidth, phase }) {
-  // A tap or an aborted vertical gesture can never vote, regardless of
-  // how fast it was.
+export function shouldCommit({ dx, velocity, cardWidth, phase, cancelled = false }) {
+  if (cancelled) return false;
+  // A tap, an undecided touch, or a vertical gesture can never vote,
+  // regardless of how fast it was.
   if (phase !== 'dragging') return false;
 
   const absDx = Math.abs(dx);

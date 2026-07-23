@@ -62,8 +62,22 @@ export const CONFIG = {
   SWIPE_FLING_VELOCITY: 0.95,     // px/ms -- roughly double the old value
   SWIPE_FLING_MIN_PX: 90,         // a fling must still cover real ground
   SWIPE_DEAD_ZONE_PX: 16,         // card doesn't move at all below this
-  SWIPE_DIRECTION_LOCK: 1.25,     // |dx| must beat |dy| by this to count
-  SWIPE_VERTICAL_ABORT_PX: 55,    // clearly a scroll -> cancel the swipe
+
+  // ---- Axis locking (update 6) ----
+  // Second round of gesture work. Holding and dragging vertically was
+  // still throwing the card, because the old model re-evaluated
+  // direction on EVERY move while undecided -- so a mostly-vertical
+  // gesture that drifted horizontally could flip into a swipe partway
+  // through, and once it flipped it never flipped back.
+  //
+  // Now the axis is decided exactly once, at SWIPE_AXIS_LOCK_PX of
+  // total travel, and then it is permanent for the life of that touch.
+  // Vertical means vertical: the card will not move, will not tilt, and
+  // cannot vote, no matter what the finger does afterwards.
+  SWIPE_AXIS_LOCK_PX: 12,         // total travel at which the axis is decided
+  SWIPE_DIRECTION_LOCK: 1.25,     // |dx| must beat |dy| by this to lock horizontal
+                                   // (so a 45-degree diagonal locks VERTICAL --
+                                   //  the safe default is "don't vote")
 };
 
 // §1: the four platforms, and the canonical genre vocabulary from

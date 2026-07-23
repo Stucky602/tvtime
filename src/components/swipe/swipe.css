@@ -167,7 +167,13 @@
   border-top: 1px solid var(--ink-edge);
   background: var(--ink-raised);
   max-height: 38%;
-  overflow-y: auto;
+  /* No overflow-y: auto. This used to be a nested scroll area sitting
+     directly under the swipe surface, so reaching down to read the
+     synopsis put a scrollable element and a drag handler in a fight for
+     the same touch. The More/Less button replaced the need for it. */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .card__title {
