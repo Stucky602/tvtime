@@ -65,7 +65,7 @@ import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } fro
 // the instantaneous flick is what the user actually did.
 const VELOCITY_WINDOW_MS = 80;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [] }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -119,6 +119,22 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
 
   const current = cards[index];
   const next = cards[index + 1];
+
+  // #11: restart at the top of the list whenever the filter set changes.
+  //
+  // Position lives in `index`, and nothing reset it when the `cards`
+  // prop changed -- so applying a filter swapped the array underneath a
+  // stale index. You stayed parked at position N of a list that no
+  // longer meant the same thing, which read as "the filter didn't take
+  // effect until I swiped once".
+  //
+  // Keyed on a signature of the filters rather than on `cards` identity:
+  // `cards` is memoised but still churns for unrelated reasons (a deck
+  // rebuild, a swipe), and resetting on those would throw away your
+  // place mid-session.
+  useEffect(() => {
+    setIndex(0);
+  }, [resetKey]);
 
   // Collapse an expanded synopsis whenever the card changes -- carrying
   // the expanded state onto the next title would hide its poster for no

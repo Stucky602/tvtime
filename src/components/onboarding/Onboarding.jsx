@@ -346,8 +346,24 @@ function CreateRoom({ onBack, onCreated }) {
 
 function JoinRoom({ onBack, onJoined, onRoomFull }) {
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [pin, setPin] = useState('');
+  // Prefill from an invite link (#join=CODE-PIN). Read once on mount and
+  // then cleared from the URL, so a shared screenshot or a browser
+  // history entry doesn't keep the PIN around longer than the moment it
+  // was needed.
+  const invite = (() => {
+    try {
+      const m = /#join=([A-Za-z0-9]{6})-(\d{4})/.exec(window.location.hash || '');
+      if (m) {
+        window.history.replaceState(null, '', window.location.pathname);
+        return { code: m[1].toUpperCase(), pin: m[2] };
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  })();
+  const [code, setCode] = useState(invite?.code || '');
+  const [pin, setPin] = useState(invite?.pin || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 

@@ -19,7 +19,7 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, presentPartners = [], liveConnection = false }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -128,6 +128,12 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
         <button className="filter-toggle" onClick={() => setFilterOpen(true)}>
           Filters{hasFilters && ' •'}
         </button>
+        {liveConnection && presentPartners.length > 0 && (
+          <span className="presence" role="status">
+            <span className="presence__dot" aria-hidden="true" />
+            {presentPartners[0].display_name || 'Your partner'} is here
+          </span>
+        )}
         {pendingSync > 0 && (
           <span className="sync-note">
             {pendingSync} swipe{pendingSync === 1 ? '' : 's'} syncing…
@@ -174,6 +180,7 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           debugByKey={deck?.debugByKey}
           devMode={devMode}
           roomPlatforms={room.platforms}
+          resetKey={JSON.stringify(filters)}
           onCardResolved={(t) => addSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onCardUndone={(t) => removeSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onExhausted={() => {}}

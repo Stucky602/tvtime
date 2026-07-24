@@ -160,6 +160,24 @@ button {
   paint-order: stroke fill;
 }
 
+/* Accessibility round 2.
+   Type scales with the user's OS text-size setting instead of being
+   pinned to px. clamp() keeps it legible at both extremes -- a hard
+   rem swap would let a large accessibility setting break the card
+   layout, which helps nobody. */
+html {
+  font-size: clamp(15px, 1rem, 22px);
+}
+
+/* Respect "reduce motion" for the things that actually move: the card
+   spring, the match burst, and the presence pulse. Reduced motion is
+   not "no feedback" -- the match still appears, it just doesn't
+   animate in. */
+@media (prefers-reduced-motion: reduce) {
+  .presence__dot { animation: none !important; }
+  .match { animation: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

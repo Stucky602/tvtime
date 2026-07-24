@@ -11,6 +11,7 @@ import { TogetherTab, SoloTab, PendingTab, WatchedTab } from './components/tabs/
 import TabBar from './components/tabs/TabBar.jsx';
 import { ensureSession, isConfigured } from './lib/supabase.js';
 import { getMyRoomState } from './lib/room.js';
+import { useRoomRealtime } from './lib/useRoomRealtime.js';
 import { rpc } from './lib/supabase.js';
 import './components/swipe/swipe.css';
 import './components/tabs/tabs.css';
@@ -74,6 +75,14 @@ export default function App() {
     window.addEventListener('focus', touch);
     return () => window.removeEventListener('focus', touch);
   }, [session]);
+
+  // Hooks cannot be conditional, so this runs before we know whether
+  // there is a room; joinRoomChannel no-ops on a null roomId.
+  const { present, live, pulse } = useRoomRealtime({
+    roomId: roomState?.room?.id,
+    userId: roomState?.user?.id,
+    displayName: roomState?.user?.display_name,
+  });
 
   const refreshRoomState = async () => {
     if (!session) return;
@@ -197,10 +206,13 @@ export default function App() {
           onOpenSettings={() => setShowSettings(true)}
           onOpenStats={() => setOverlay('stats')}
           onOpenSearch={() => setOverlay('search')}
+          presentPartners={present}
+          liveConnection={live}
         />
       )}
       {tab === 'together' && (
         <TogetherTab
+          pulse={pulse}
           roomId={room.id}
           roomPlatforms={room.platforms}
           onTonightsPick={async () => {
@@ -213,15 +225,16 @@ export default function App() {
           }}
         />
       )}
-      {tab === 'solo' && <SoloTab roomId={room.id} roomPlatforms={room.platforms} />}
-      {tab === 'pending' && <PendingTab roomId={room.id} roomPlatforms={room.platforms} />}
-      {tab === 'watched' && <WatchedTab roomId={room.id} roomPlatforms={room.platforms} />}
+      {tab === 'solo' && <SoloTab pulse={pulse} roomId={room.id} roomPlatforms={room.platforms} />}
+      {tab === 'pending' && <PendingTab pulse={pulse} roomId={room.id} roomPlatforms={room.platforms} />}
+      {tab === 'watched' && <WatchedTab pulse={pulse} roomId={room.id} roomPlatforms={room.platforms} />}
 
       <TabBar
         active={tab}
         onChange={setTab}
         userId={user.id}
         tabSeenAt={user.tab_seen_at}
+        pulse={pulse}
       />
     </div>
   );

@@ -41,6 +41,10 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetGenres, setResetGenres] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Needed to build a share link. Never displayed -- the stored PIN is
+  // bcrypt-hashed and unreadable, so this is only populated if the user
+  // types it here to generate a link.
+  const [pin, setPin] = useState('');
   const [error, setError] = useState(null);
 
   const dirty =
@@ -53,6 +57,34 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
 
   const toggleGenre = (id) =>
     setGenrePrefs((g) => (g.includes(id) ? g.filter((x) => x !== id) : [...g, id]));
+
+  // Reading a 6-character code and a 4-digit PIN aloud is the worst
+  // moment in the product, and every new user has to do it exactly
+  // once. A share link carries both, so the other person taps rather
+  // than transcribes.
+  //
+  // The PIN travels in the URL fragment (#) rather than the query
+  // string, deliberately: fragments are never sent to the server and
+  // stay out of server logs, referrer headers, and analytics. It is
+  // still a link that grants room access, so it is treated like one --
+  // the UI says so plainly rather than implying it is safe to post
+  // publicly.
+  const joinUrl = `${window.location.origin}${window.location.pathname}#join=${room.code}-${pin || ''}`;
+
+  const shareInvite = async () => {
+    const text = `Join me on FlixPix — room ${room.code}${pin ? `, PIN ${pin}` : ''}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'FlixPix', text, url: pin ? joinUrl : undefined });
+        return;
+      }
+      await navigator.clipboard.writeText(pin ? `${text}\n${joinUrl}` : text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('Sharing failed — the code is shown above, send it manually.');
+    }
+  };
 
   const copyCode = async () => {
     try {
@@ -123,6 +155,33 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
         <button className="onboard-btn" onClick={copyCode}>
           {copied ? 'Copied' : 'Copy code'}
         </button>
+
+        {!partner && (
+          <>
+            <label className="field">
+              Add your PIN to make a one-tap invite
+              <input
+                inputMode="numeric"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="4 digits"
+              />
+            </label>
+            <p className="settings__hint">
+              We can't read your stored PIN — it's hashed. Type it once here and
+              we'll build a link that fills in both for them. Treat that link
+              like a key: anyone with it can join.
+            </p>
+            <button
+              className="onboard-btn onboard-btn--primary"
+              onClick={shareInvite}
+              disabled={pin.length !== 4}
+            >
+              Share invite link
+            </button>
+          </>
+        )}
       </section>
 
       <section className="settings__group">

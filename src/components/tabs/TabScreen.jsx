@@ -22,6 +22,10 @@ export default function TabScreen({
   roomId,
   roomPlatforms,
   onTonightsPick,
+  // Increments when a partner swipe lands. We re-read rather than
+  // applying the event payload -- realtime is an accelerator here, not
+  // a source of truth.
+  pulse = 0,
   // When true this tab shows ONLY watched titles (the new Watched tab);
   // otherwise watched titles are hidden entirely, because they now have
   // a home of their own rather than a collapsed section at the bottom.
@@ -58,7 +62,7 @@ export default function TabScreen({
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onFocus);
     };
-  }, [load]);
+  }, [load, pulse]);
 
   const handleWatchedChange = (key, nowWatched) => {
     setWatchedKeys((prev) => {

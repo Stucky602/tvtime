@@ -16,7 +16,7 @@ const TABS = [
   { id: 'watched', label: 'Watched' },
 ];
 
-export default function TabBar({ active, onChange, userId, tabSeenAt, refreshToken }) {
+export default function TabBar({ active, onChange, userId, tabSeenAt, refreshToken, pulse = 0 }) {
   const [badges, setBadges] = useState({ together: 0, solo: 0, pending: 0 });
 
   const refresh = useCallback(async () => {
@@ -34,7 +34,7 @@ export default function TabBar({ active, onChange, userId, tabSeenAt, refreshTok
     refresh();
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
-  }, [refresh, refreshToken]);
+  }, [refresh, refreshToken, pulse]);
 
   const handleChange = async (tabId) => {
     onChange(tabId);

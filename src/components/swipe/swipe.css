@@ -723,3 +723,33 @@
   line-height: 1.45;
   color: var(--text-dim);
 }
+
+/* ---- Live presence ---- */
+
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--pop-cyan);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.presence__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+  animation: presence-pulse 2s ease-in-out infinite;
+}
+
+@keyframes presence-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

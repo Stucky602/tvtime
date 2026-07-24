@@ -66,3 +66,42 @@ alter default privileges in schema public
   grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public
   grant all on functions to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------
+-- Realtime stand-in
+-- ---------------------------------------------------------------------
+-- Supabase provides a `realtime` schema with a `messages` table that
+-- private-channel authorization policies attach to, plus a
+-- realtime.topic() function returning the channel being joined. Plain
+-- Postgres has neither, so the presence migration could not even be
+-- parsed here without this.
+--
+-- This emulates the shape only -- enough for the policy SQL to compile
+-- and be inspected. It does not emulate Realtime's behaviour, so these
+-- policies still need verifying against a real project.
+create schema if not exists realtime;
+grant usage on schema realtime to anon, authenticated, service_role;
+
+create table if not exists realtime.messages (
+  id        bigserial primary key,
+  topic     text,
+  extension text
+);
+alter table realtime.messages enable row level security;
+grant select, insert on realtime.messages to authenticated;
+
+-- Real Realtime sets the topic per connection; a GUC is the closest
+-- local equivalent and lets a policy be exercised by hand.
+-- Grant on the function too, so a policy referencing it is testable.
+create or replace function realtime.topic() returns text
+  language sql stable
+as $$ select nullif(current_setting('realtime.topic', true), '') $$;
+
+-- Publication the presence migration adds `swipes` to.
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+end $$;
+grant execute on function realtime.topic() to anon, authenticated, service_role;
