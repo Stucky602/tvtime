@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { posterUrl } from '../../lib/config.js';
+import { posterUrl, adaptivePosterSize } from '../../lib/config.js';
 import { watchTarget, trailerEmbedUrl } from '../../lib/links.js';
 
 // FlixPix card.
@@ -30,7 +30,7 @@ export default function SwipeCard({
 }) {
   const [posterFailed, setPosterFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const poster = posterUrl(title.poster_path, 'w780');
+  const poster = posterUrl(title.poster_path, adaptivePosterSize());
   const trailer = trailerEmbedUrl(title.trailer_key);
   const watch = watchTarget(title, roomPlatforms);
 
@@ -67,7 +67,14 @@ export default function SwipeCard({
               allowFullScreen
             />
           ) : poster && !posterFailed ? (
-            <img src={poster} alt="" draggable="false" onError={() => setPosterFailed(true)} />
+            <img
+              src={poster}
+              alt=""
+              draggable="false"
+              decoding="async"
+              fetchPriority={isNext ? 'low' : 'high'}
+              onError={() => setPosterFailed(true)}
+            />
           ) : (
             <div className="card__noart">
               <span className="card__noart-mark shout">

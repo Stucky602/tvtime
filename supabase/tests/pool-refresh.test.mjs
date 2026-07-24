@@ -160,7 +160,8 @@ const server = http.createServer(async (req, res) => {
   }
   // Trailer backfill queue (Phase C)
   if (p === '/rest/v1/titles' && req.method === 'GET'
-      && url.searchParams.get('trailer_checked_at') === 'is.null') {
+      && (url.searchParams.get('trailer_checked_at') === 'is.null'
+          || (url.searchParams.get('or') || '').includes('checked_at'))) {
     if (backfillServed) return send(200, []); // terminates once served
     backfillServed = true;
     // 111 is ALSO returned by Phase A discovery -- this is the exact

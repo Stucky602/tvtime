@@ -156,8 +156,10 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
           {copied ? 'Copied' : 'Copy code'}
         </button>
 
-        {!partner && (
-          <>
+        {/* Previously gated on !partner, which hid this entirely once
+            you were paired. Wrong call: you also need it to re-invite
+            after someone leaves or loses their phone. */}
+        <>
             <label className="field">
               Add your PIN to make a one-tap invite
               <input
@@ -180,8 +182,7 @@ export default function Settings({ room, user, partner, onClose, onRoomLeft }) {
             >
               Share invite link
             </button>
-          </>
-        )}
+        </>
       </section>
 
       <section className="settings__group">

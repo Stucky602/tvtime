@@ -11,6 +11,7 @@ import {
   removeSwipedKey,
 } from '../../lib/data.js';
 import { applyFilters } from '../../lib/deck.js';
+import { partnerActivity } from '../../lib/tabs.js';
 import { CONFIG } from '../../lib/config.js';
 import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
@@ -19,13 +20,14 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, presentPartners = [], liveConnection = false }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, presentPartners = [], liveConnection = false }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const [pendingSync, setPendingSync] = useState(0);
   const [loadError, setLoadError] = useState(null);
+  const [activity, setActivity] = useState(null);
 
   // Captured ONCE per mount. Cards swiped in previous visits to this tab
   // are filtered out here so the deck resumes where it left off; cards
@@ -77,6 +79,20 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
     // the real dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id, user.id, partner?.id]);
+
+  // Partner digest, read once per mount. Uses the Swipe tab's own
+  // last-seen marker so it means "since you last opened this".
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const since = user?.tab_seen_at?.swipe;
+      const a = await partnerActivity(partner?.id, since);
+      if (!cancelled) setActivity(a);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [partner?.id, user?.tab_seen_at?.swipe]);
 
   // §6: flush the offline queue on focus/reconnect.
   useEffect(() => {
@@ -145,6 +161,9 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
         <button className="gear" onClick={onOpenStats} aria-label="Stats">
           Stats
         </button>
+        <button className="gear" onClick={onOpenRecap} aria-label="Your year">
+          Year
+        </button>
         <button className="gear" onClick={onOpenSettings} aria-label="Settings">
           Settings
         </button>
@@ -154,6 +173,16 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           the room code for re-sharing. It was specified and never built
           -- until now the first user got a normal-looking app with no
           hint that nothing would ever match. */}
+      {partner && activity && activity.swipes >= 3 && (
+        <div className="waiting waiting--activity">
+          <p className="waiting__text">
+            {partner.display_name} swiped {activity.swipes} title
+            {activity.swipes === 1 ? '' : 's'} since you were last here
+            {activity.yes > 0 ? ` — ${activity.yes} yes` : ''}.
+          </p>
+        </div>
+      )}
+
       {!partner && (
         <div className="waiting">
           <p className="waiting__text">

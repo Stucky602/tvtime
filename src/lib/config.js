@@ -39,6 +39,11 @@ export const CONFIG = {
   // Unlike the others this term is signed, so it can demote as well as
   // promote.
   W_VERDICT: 1.2,
+  // Keyword affinity. Weighted just under genre because it is sharper
+  // but sparser -- many titles share no keywords with anything you have
+  // swiped, and in those cases the term is simply 0 and genre carries
+  // the weight instead.
+  W_KEYWORD: 0.9,
   W_QUALITY: 0.5,
   W_POP: 0.4,
   W_RECENCY: 0.2,
@@ -139,4 +144,49 @@ export const GENRES = [
 export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 export function posterUrl(path, size = 'w500') {
   return path ? `${TMDB_IMAGE_BASE}/${size}${path}` : null;
+}
+
+/**
+ * Poster size chosen for the current connection.
+ *
+ * The card previously always requested w780 -- roughly 120KB per poster.
+ * On a phone that is the single biggest thing standing between a swipe
+ * and the next card appearing, and on a slow connection it is the
+ * difference between instant and visibly waiting.
+ *
+ * navigator.connection is Chromium-only, so this is a progressive
+ * enhancement: absent the API everyone gets w500, which is a better
+ * default than w780 anyway at typical card sizes.
+ */
+export function adaptivePosterSize() {
+  try {
+    const c = navigator.connection;
+    if (!c) return 'w500';
+    if (c.saveData) return 'w342';
+    const t = c.effectiveType || '';
+    if (t.includes('2g')) return 'w185';
+    if (t === '3g') return 'w342';
+    return 'w500';
+  } catch {
+    return 'w500';
+  }
+}
+
+/**
+ * Warm the browser cache for upcoming cards.
+ *
+ * Without this the next poster only starts downloading once the card is
+ * on screen, so every swipe has a visible blank moment. Two cards ahead
+ * is deliberate: enough to hide the gap, few enough that a fast swiper
+ * does not queue a dozen wasted downloads.
+ */
+export function prefetchPosters(titles, size) {
+  if (typeof Image === 'undefined') return;
+  for (const t of titles.slice(0, 2)) {
+    const url = posterUrl(t?.poster_path, size);
+    if (!url) continue;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+  }
 }

@@ -5,6 +5,7 @@ import Settings from './components/settings/Settings.jsx';
 import TonightsPick from './components/tabs/TonightsPick.jsx';
 import Stats from './components/tabs/Stats.jsx';
 import StatusScreen from './components/tabs/StatusScreen.jsx';
+import Recap from './components/tabs/Recap.jsx';
 import TitleSearch from './components/tabs/TitleSearch.jsx';
 import { fetchTogether } from './lib/tabs.js';
 import { TogetherTab, SoloTab, PendingTab, WatchedTab } from './components/tabs/TabPages.jsx';
@@ -141,6 +142,14 @@ export default function App() {
     );
   }
 
+  if (overlay === 'recap') {
+    return (
+      <div className="app">
+        <Recap room={roomState.room} onClose={() => setOverlay(null)} />
+      </div>
+    );
+  }
+
   if (overlay === 'status') {
     return (
       <div className="app">
@@ -205,6 +214,7 @@ export default function App() {
           devMode={devMode}
           onOpenSettings={() => setShowSettings(true)}
           onOpenStats={() => setOverlay('stats')}
+          onOpenRecap={() => setOverlay('recap')}
           onOpenSearch={() => setOverlay('search')}
           presentPartners={present}
           liveConnection={live}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SwipeCard from './SwipeCard.jsx';
-import { CONFIG } from '../../lib/config.js';
+import { CONFIG, prefetchPosters, adaptivePosterSize } from '../../lib/config.js';
 import { submitSwipe, undoSwipe } from '../../lib/data.js';
 import { hapticThreshold, hapticCommit, hapticUndo, hapticMatch } from '../../lib/haptics.js';
 import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
@@ -142,6 +142,11 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   useEffect(() => {
     setExpanded(false);
   }, [index]);
+
+  // Warm the next couple of posters so swiping doesn't flash blank.
+  useEffect(() => {
+    prefetchPosters(cards.slice(index + 1, index + 3), adaptivePosterSize());
+  }, [cards, index]);
 
   useEffect(() => {
     if (!current && cards.length > 0) onExhausted?.();

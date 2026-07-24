@@ -168,8 +168,17 @@ const RECENCY_YEARS = 3;
 // TMDB detail calls after filtering, comfortably inside a nightly
 // Action's time budget. Raise these once real usage shows the pool
 // needs to grow faster; there's nothing structural stopping it.
-const PAGES_PER_RUN_POPULAR = 2;
-const PAGES_PER_RUN_BACKCATALOG = 1;
+// Deck exhaustion.
+//
+// A ~3,000 title pool against two people swiping 40 a night is weeks,
+// not months -- and the original page counts (2 + 1) only add ~60 raw
+// candidates a night, most of which are already cached. That is a pool
+// that stops growing long before you stop swiping.
+//
+// Raised, plus a deep-paging pass below that reaches material the
+// popularity-ordered pages never surface.
+const PAGES_PER_RUN_POPULAR = 4;
+const PAGES_PER_RUN_BACKCATALOG = 3;
 
 // Stateless paging: rather than track a "last page fetched" cursor in
 // its own table (one more thing that could drift from reality), the
@@ -379,7 +388,7 @@ async function discoverPage(mediaType, slice, providerIdsCsv, page) {
 async function fetchDetail(mediaType, tmdbId) {
   const path = mediaType === 'movie' ? `/movie/${tmdbId}` : `/tv/${tmdbId}`;
   // keywords rides along on the same request -- no extra API call.
-  return tmdbGet(path, { append_to_response: 'watch/providers,keywords,videos' });
+  return tmdbGet(path, { append_to_response: 'watch/providers,keywords,videos,credits' });
 }
 
 function extractProviders(detail) {
@@ -464,6 +473,51 @@ function extractWatchLink(detail) {
   return detail?.['watch/providers']?.results?.US?.link || null;
 }
 
+/**
+ * Keyword ids. TMDB nests these differently per media type -- movies use
+ * `keywords.keywords`, TV uses `keywords.results` -- which is the kind
+ * of quiet inconsistency that silently yields an empty array forever if
+ * you only test with movies.
+ */
+function extractKeywordIds(detail) {
+  const kw = detail?.keywords;
+  const list = kw?.keywords || kw?.results || [];
+  return list.map((k) => k.id).filter((n) => Number.isFinite(n)).slice(0, 40);
+}
+
+/**
+ * Top billed cast. Capped at 8 because similarity gets noisier the
+ * deeper you go -- the 30th credited actor tells you nothing about
+ * whether two films feel alike, but does make every array comparison
+ * more expensive.
+ */
+function extractCast(detail) {
+  const cast = (detail?.credits?.cast || []).slice(0, 8);
+  return {
+    ids: cast.map((c) => c.id).filter(Number.isFinite),
+    names: cast.map((c) => c.name).filter(Boolean),
+  };
+}
+
+/**
+ * Directors for film; creators for TV, since TV has no single director
+ * and `created_by` is the closest equivalent an audience would name.
+ */
+function extractDirectors(mediaType, detail) {
+  if (mediaType === 'tv') {
+    const creators = detail?.created_by || [];
+    return {
+      ids: creators.map((c) => c.id).filter(Number.isFinite),
+      names: creators.map((c) => c.name).filter(Boolean),
+    };
+  }
+  const crew = (detail?.credits?.crew || []).filter((c) => c.job === 'Director');
+  return {
+    ids: crew.map((c) => c.id).filter(Number.isFinite),
+    names: crew.map((c) => c.name).filter(Boolean),
+  };
+}
+
 function titleRowFromDetail(mediaType, detail, genreMap) {
   const genreIds = (detail.genres || []).map((g) => g.id);
   const canonicalGenres = mapGenres(mediaType, genreIds, genreMap);
@@ -477,6 +531,8 @@ function titleRowFromDetail(mediaType, detail, genreMap) {
     detail.number_of_episodes > TV_MAX_EPISODES;
 
   const now = new Date().toISOString();
+  const castInfo = extractCast(detail);
+  const dirInfo = extractDirectors(mediaType, detail);
 
   return {
     tmdb_id: detail.id,
@@ -500,6 +556,12 @@ function titleRowFromDetail(mediaType, detail, genreMap) {
     is_anime: detectAnime(mediaType, detail, genreIds),
     trailer_key: extractTrailerKey(detail),
     watch_link: extractWatchLink(detail),
+    keyword_ids: extractKeywordIds(detail),
+    cast_ids: castInfo.ids,
+    cast_names: castInfo.names,
+    director_ids: dirInfo.ids,
+    director_names: dirInfo.names,
+    credits_checked_at: now,
     // Marks "we have looked", which is what lets the backfill
     // terminate: a title with genuinely no trailer gets a null key and
     // a non-null checked_at, so it is never re-queried.
@@ -510,6 +572,43 @@ function titleRowFromDetail(mediaType, detail, genreMap) {
 // ---------------------------------------------------------------------
 // Phase A: discover new titles
 // ---------------------------------------------------------------------
+
+/**
+ * Pages far deeper than the popular slice ever reaches.
+ *
+ * Discovery is popularity-ordered, so pages 1-6 are the same few hundred
+ * titles every night once the pool is warm. This walks a rotating window
+ * much further in (day-of-year driven, same stateless approach as the
+ * main pager) to pull material that is perfectly watchable and simply
+ * never popular enough to appear near the front.
+ *
+ * Quality-gated by vote count, because the deep tail of TMDB is mostly
+ * things nobody has rated and you do not want them in a deck.
+ */
+async function discoverDeep(mediaType, providerIdsCsv) {
+  const start = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 0));
+  const dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400_000);
+  // Pages 8..57, rotating -- past the popular front, short of the
+  // 500-page ceiling where results thin out entirely.
+  const page = 8 + (dayOfYear % 50);
+
+  const path = mediaType === 'movie' ? '/discover/movie' : '/discover/tv';
+  const params = {
+    page,
+    watch_region: 'US',
+    with_watch_providers: providerIdsCsv,
+    with_watch_monetization_types: 'flatrate',
+    include_adult: 'false',
+    sort_by: 'popularity.desc',
+    'vote_count.gte': 80,
+  };
+  if (mediaType === 'tv') {
+    params.without_genres = HARD_EXCLUDE_TV_GENRES.join(',');
+    params.with_original_language = 'en';
+  }
+  const data = await tmdbGet(path, params);
+  return data.results || [];
+}
 
 async function runDiscoveryPhase(providerIdsCsv, genreMap) {
   const rows = [];
@@ -529,6 +628,16 @@ async function runDiscoveryPhase(providerIdsCsv, genreMap) {
           if (results.length === 0) break; // ran past TMDB's total_pages for this query
         } catch (err) {
           console.warn(`Discover failed for ${mediaType}/${slice} page ${basePage + offset}: ${err.message}`);
+        }
+      }
+
+      // Deep pass, once per media type per run.
+      if (slice === 'popular') {
+        try {
+          const deep = await discoverDeep(mediaType, providerIdsCsv);
+          candidates.push(...deep);
+        } catch (err) {
+          console.warn(`Deep discovery failed for ${mediaType}: ${err.message}`);
         }
       }
 
@@ -617,8 +726,8 @@ async function runRefreshPhase(genreMap) {
 // Phase C: backfill trailers/watch links for titles that predate them
 // ---------------------------------------------------------------------
 //
-// Titles written before the trailer feature have trailer_checked_at
-// NULL. Nothing else would ever re-fetch them: the staleness pass only
+// Titles written before the trailer or credits features have the
+// corresponding checked_at column NULL. Nothing else would ever re-fetch them: the staleness pass only
 // triggers on 30-day provider age, so trailers would have appeared over
 // a month for whichever slice happened to expire, rather than for the
 // pool people are actually swiping.
@@ -631,7 +740,7 @@ async function runTrailerBackfill(genreMap) {
   let pending;
   try {
     pending = await supabaseGet(
-      `/titles?select=tmdb_id,media_type&trailer_checked_at=is.null&order=popularity.desc&limit=${BACKFILL_BATCH_CAP}`
+      `/titles?select=tmdb_id,media_type&or=(trailer_checked_at.is.null,credits_checked_at.is.null)&order=popularity.desc&limit=${BACKFILL_BATCH_CAP}`
     );
   } catch (err) {
     console.warn(`Trailer backfill skipped: ${err.message}`);

@@ -11,6 +11,7 @@
 // are two users and a few hundred swipes to learn from.
 
 import { CONFIG } from './config.js';
+import { keywordAffinityForTitle } from './similarity.js';
 
 // ---------------------------------------------------------------------
 // Genre affinity (§5.2)
@@ -248,6 +249,12 @@ export function scoreTitle(title, ctx, rng = Math.random) {
     // Signed, unlike every other term: this one can push a title DOWN,
     // which is the whole point of learning from disappointment.
     verdict: verdictAffinityForTitle(title, ctx.verdictAffinities),
+    // Finer-grained than genre: "time loop" and "heist" say far more
+    // about whether you'll enjoy something than "Drama" does. Signed,
+    // like verdict, so a keyword you reliably pass on demotes.
+    keyword: ctx.keywordAffinities
+      ? keywordAffinityForTitle(title, ctx.keywordAffinities, ctx.keywordGlobalRate ?? 0.5)
+      : 0,
     quality: quality(title),
     pop: ctx.popularityNorm(title),
     recency: recency(title, ctx.currentYear),
@@ -259,6 +266,7 @@ export function scoreTitle(title, ctx, rng = Math.random) {
     CONFIG.W_PARTNER * terms.partner +
     CONFIG.W_GENRE * terms.genre +
     CONFIG.W_VERDICT * terms.verdict +
+    CONFIG.W_KEYWORD * terms.keyword +
     CONFIG.W_QUALITY * terms.quality +
     CONFIG.W_POP * terms.pop +
     CONFIG.W_RECENCY * terms.recency +

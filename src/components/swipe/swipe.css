@@ -753,3 +753,9 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+/* Partner activity digest -- distinct from the waiting banner so the
+   two never read as the same kind of message. */
+.waiting--activity {
+  background: var(--pop-yellow);
+}

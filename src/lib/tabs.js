@@ -171,6 +171,45 @@ export async function fetchBadgeCounts(tabSeenAt) {
   return results;
 }
 
+/**
+ * What your partner has been up to since you last looked.
+ *
+ * Closes the feedback loop that push notifications would otherwise
+ * handle -- the architecture rules those out, and presence only helps
+ * when you're both in the app at the same moment. This covers the far
+ * more common case: you open the app hours later and have no idea
+ * whether anything happened.
+ *
+ * Deliberately reports SWIPES rather than new matches. Matches are
+ * already visible as badges; the useful and otherwise invisible fact is
+ * "she went through 30 titles last night", which tells you whether
+ * there's anything worth looking at.
+ */
+export async function partnerActivity(partnerId, since) {
+  if (!partnerId) return null;
+  const cutoff = since ? new Date(since).toISOString() : null;
+
+  let q = supabase
+    .from('swipes')
+    .select('direction,voted_at')
+    .eq('user_id', partnerId)
+    .order('voted_at', { ascending: false })
+    .limit(200);
+  if (cutoff) q = q.gt('voted_at', cutoff);
+
+  const { data, error } = await q;
+  if (error) return null;
+
+  const rows = data || [];
+  if (rows.length === 0) return null;
+
+  return {
+    swipes: rows.length,
+    yes: rows.filter((r) => r.direction === 'right').length,
+    lastAt: rows[0]?.voted_at ?? null,
+  };
+}
+
 export async function markTabSeen(userId, tab) {
   const { data, error } = await supabase.from('users').select('tab_seen_at').eq('id', userId).single();
   if (error) throw error;

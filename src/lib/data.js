@@ -83,7 +83,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   let query = supabase
     .from('titles')
     .select(
-      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language,trailer_key,watch_link'
+      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language,trailer_key,watch_link,keyword_ids,cast_ids,cast_names,director_ids,director_names'
     )
     .eq('excluded', false)
     .order('popularity', { ascending: false })
@@ -126,7 +126,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
     ];
     const { data: hist } = await supabase
       .from('titles')
-      .select('tmdb_id,media_type,genres')
+      .select('tmdb_id,media_type,genres,keyword_ids,cast_ids,cast_names,director_ids,director_names')
       .in('tmdb_id', ids);
     historyTitles = hist || [];
   }

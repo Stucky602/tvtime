@@ -20,6 +20,7 @@
 // different times, with a clean handoff. See §5.4.
 
 import { CONFIG } from './config.js';
+import { keywordAffinities } from './similarity.js';
 import {
   genreAffinities,
   verdictAffinities,
@@ -69,6 +70,8 @@ function buildContext(user, allSwipes, titlesByKey, candidates, partnerId, watch
     user.genre_prefs
   );
 
+  const kwAff = keywordAffinities(ownSwipes, titlesByKey);
+
   const partnerVotedKeys = new Set();
   if (partnerId) {
     for (const s of allSwipes) {
@@ -91,6 +94,8 @@ function buildContext(user, allSwipes, titlesByKey, candidates, partnerId, watch
     // correct: "we watched this and didn't like it" is a shared fact,
     // not a private one.
     verdictAffinities: verdictAffinities(watchedRows, titlesByKey),
+    keywordAffinities: kwAff.affinities,
+    keywordGlobalRate: kwAff.globalRate,
     popularityNorm: makePopularityNormalizer(candidates),
     currentYear: new Date().getFullYear(),
   };
