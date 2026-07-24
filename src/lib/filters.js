@@ -14,6 +14,16 @@ export const EMPTY_FILTERS = {
   services: [],      // platform slugs
   language: null,    // null | 'en' | 'foreign'
   newOnly: false,    // last 2 years
+
+  // ---- Exclusions (feature 4) ----
+  // Inclusion and exclusion are genuinely different intents: "show me
+  // comedies" is not the inverse of "never show me horror", and a user
+  // wanting the second had no way to express it. These apply AFTER the
+  // inclusive filters and always win a conflict -- an explicit "never"
+  // should not be overridden by a broad "show me".
+  excludeGenres: [],  // canonical genre ids to never show
+  maxRating: null,    // hide anything rated ABOVE this (a ceiling, e.g. avoid 8+ prestige marathons)
+  blocklist: [],      // `tmdb_id:media_type` keys the user never wants to see
 };
 
 /** Is anything actually filtering? Drives the dot on the Filters button. */
@@ -28,6 +38,9 @@ export function hasActiveFilters(f) {
       f.minRating ||
       f.services?.length ||
       f.language ||
-      f.newOnly
+      f.newOnly ||
+      f.excludeGenres?.length ||
+      f.maxRating ||
+      f.blocklist?.length
   );
 }

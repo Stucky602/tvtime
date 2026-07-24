@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { posterUrl, CONFIG } from '../../lib/config.js';
 import { markWatched, unmarkWatched } from '../../lib/tabs.js';
 import { watchTarget } from '../../lib/links.js';
@@ -12,11 +12,8 @@ import { watchTarget } from '../../lib/links.js';
 // Pass/Yes buttons in the swipe deck.
 
 export default function TitleListItem({ title, roomId, roomPlatforms = [], watched = false, verdict, onWatchedChange }) {
-  const [dy, setDy] = useState(0);
-  const [dragging, setDragging] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [busy, setBusy] = useState(false);
-  const startRef = useRef(0);
 
   const commitWatch = async () => {
     if (busy) return;
@@ -30,7 +27,6 @@ export default function TitleListItem({ title, roomId, roomPlatforms = [], watch
       setTimeout(() => setShowToast(false), CONFIG.VERDICT_TOAST_SECONDS * 1000);
     } finally {
       setBusy(false);
-      setDy(0);
     }
   };
 
@@ -50,35 +46,11 @@ export default function TitleListItem({ title, roomId, roomPlatforms = [], watch
     await markWatched(title.tmdb_id, title.media_type, v);
   };
 
-  const onPointerDown = (e) => {
-    if (watched) return;
-    startRef.current = e.clientY;
-    setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onPointerMove = (e) => {
-    if (!dragging) return;
-    // Upward only -- clamp positive travel so a downward drag does
-    // nothing rather than fighting the list's own scroll.
-    const delta = Math.min(0, e.clientY - startRef.current);
-    setDy(delta);
-  };
-  const onPointerUp = () => {
-    setDragging(false);
-    if (dy < -70) commitWatch();
-    else setDy(0);
-  };
 
-  const leak = Math.min(1, Math.abs(dy) / 90);
 
   return (
     <li
       className={`row ${watched ? 'row--watched' : ''}`}
-      style={{ transform: `translateY(${dy}px)`, opacity: 1 - leak * 0.3 }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
     >
       <div className="row__poster">
         {title.poster_path ? (

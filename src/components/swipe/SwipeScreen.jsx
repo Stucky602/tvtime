@@ -19,7 +19,7 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -133,6 +133,9 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
             {pendingSync} swipe{pendingSync === 1 ? '' : 's'} syncing…
           </span>
         )}
+        <button className="gear" onClick={onOpenSearch} aria-label="Search titles">
+          Search
+        </button>
         <button className="gear" onClick={onOpenStats} aria-label="Stats">
           Stats
         </button>

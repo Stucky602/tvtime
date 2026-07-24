@@ -379,3 +379,62 @@ begin
   end if;
   raise notice 'PASS: a seated member''s name cannot be hijacked';
 end $$;
+
+-- =====================================================================
+-- "Seen it" and "Snooze" must not behave like votes.
+--
+-- The whole point of separating them from a left swipe is that they
+-- carry no preference signal. If either leaked into room_votes it could
+-- push a title into Together or Dead on its own.
+-- =====================================================================
+
+do $$
+declare
+  v_code text;
+  v_a uuid := 'bb000000-0000-0000-0000-00000000dd01';
+  v_b uuid := 'bb000000-0000-0000-0000-00000000dd02';
+  v_bucket text;
+  v_res jsonb;
+begin
+  insert into auth.users (id) values (v_a), (v_b);
+  insert into titles (tmdb_id, media_type, title) values
+    (700400, 'movie', 'Seen Test'), (700401, 'movie', 'Snooze Test')
+    on conflict do nothing;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select (create_room('A', array['netflix'], '7777') -> 'room' ->> 'code') into v_code;
+
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform join_room(v_code, '7777', 'B');
+  perform submit_swipe(700400, 'movie', 'right');
+
+  -- A marks it seen. B said yes. This must NOT become a match.
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select submit_swipe(700400, 'movie', 'seen') into v_res;
+  if (v_res ->> 'bucket') is not null then
+    raise exception 'FAIL: "seen" produced bucket %', v_res ->> 'bucket';
+  end if;
+  if (v_res ->> 'is_new_match')::boolean then
+    raise exception 'FAIL: "seen" fired a match';
+  end if;
+
+  select bucket into v_bucket from user_title_buckets
+    where tmdb_id = 700400 and viewer_id = v_b;
+  if v_bucket is distinct from 'pending' then
+    raise exception 'FAIL: partner should still be pending, got %', coalesce(v_bucket, 'null');
+  end if;
+  raise notice 'PASS: "seen" is not a vote -- no match, partner stays pending';
+
+  -- Snooze must set a future resurface time and produce no bucket.
+  select submit_swipe(700401, 'movie', 'snooze') into v_res;
+  if (v_res ->> 'bucket') is not null then
+    raise exception 'FAIL: "snooze" produced a bucket';
+  end if;
+  if not exists (
+    select 1 from swipes
+    where user_id = v_a and tmdb_id = 700401 and resurface_after > now()
+  ) then
+    raise exception 'FAIL: "snooze" did not set a future resurface_after';
+  end if;
+  raise notice 'PASS: "snooze" sets a resurface time and casts no vote';
+end $$;

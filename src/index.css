@@ -34,8 +34,8 @@
 
   /* Type */
   --text: #f7f4ec;
-  --text-dim: #a6adc0;
-  --text-faint: #6a7186;
+  --text-dim: #b6bccc;   /* raised for 4.5:1 contrast on --panel */
+  --text-faint: #949bb0;  /* raised for 4.5:1 contrast on --panel */
 
   /* Comic accents -- flat, saturated, few */
   --pop-yellow: #ffd23f;

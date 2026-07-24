@@ -36,12 +36,27 @@ export function SoloTab({ roomId, roomPlatforms }) {
   );
 }
 
-export function PendingTab({ roomId }) {
+export function WatchedTab({ roomId, roomPlatforms }) {
+  return (
+    <TabScreen
+      title="Watched"
+      fetcher={fetchTogether}
+      roomId={roomId}
+      roomPlatforms={roomPlatforms}
+      watchedOnly
+      emptyHead="Nothing watched yet"
+      emptyBody="Mark a match as watched and it moves here, with the option to rate it."
+    />
+  );
+}
+
+export function PendingTab({ roomId, roomPlatforms }) {
   return (
     <TabScreen
       title="Pending"
       fetcher={fetchPending}
       roomId={roomId}
+      roomPlatforms={roomPlatforms}
       emptyHead="All caught up"
       emptyBody="Titles you've said yes to, waiting on your partner's swipe, show up here."
     />

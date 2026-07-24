@@ -4,8 +4,10 @@ import SwipeScreen from './components/swipe/SwipeScreen.jsx';
 import Settings from './components/settings/Settings.jsx';
 import TonightsPick from './components/tabs/TonightsPick.jsx';
 import Stats from './components/tabs/Stats.jsx';
+import StatusScreen from './components/tabs/StatusScreen.jsx';
+import TitleSearch from './components/tabs/TitleSearch.jsx';
 import { fetchTogether } from './lib/tabs.js';
-import { TogetherTab, SoloTab, PendingTab } from './components/tabs/TabPages.jsx';
+import { TogetherTab, SoloTab, PendingTab, WatchedTab } from './components/tabs/TabPages.jsx';
 import TabBar from './components/tabs/TabBar.jsx';
 import { ensureSession, isConfigured } from './lib/supabase.js';
 import { getMyRoomState } from './lib/room.js';
@@ -130,6 +132,27 @@ export default function App() {
     );
   }
 
+  if (overlay === 'status') {
+    return (
+      <div className="app">
+        <StatusScreen onClose={() => setOverlay(null)} />
+      </div>
+    );
+  }
+
+  if (overlay === 'search') {
+    return (
+      <div className="app">
+        <TitleSearch
+          userId={roomState.user.id}
+          partner={roomState.partner}
+          roomPlatforms={roomState.room.platforms}
+          onClose={() => setOverlay(null)}
+        />
+      </div>
+    );
+  }
+
   if (overlay === 'stats') {
     return (
       <div className="app">
@@ -173,6 +196,7 @@ export default function App() {
           devMode={devMode}
           onOpenSettings={() => setShowSettings(true)}
           onOpenStats={() => setOverlay('stats')}
+          onOpenSearch={() => setOverlay('search')}
         />
       )}
       {tab === 'together' && (
@@ -189,8 +213,9 @@ export default function App() {
           }}
         />
       )}
-      {tab === 'solo' && <SoloTab roomId={room.id} />}
-      {tab === 'pending' && <PendingTab roomId={room.id} />}
+      {tab === 'solo' && <SoloTab roomId={room.id} roomPlatforms={room.platforms} />}
+      {tab === 'pending' && <PendingTab roomId={room.id} roomPlatforms={room.platforms} />}
+      {tab === 'watched' && <WatchedTab roomId={room.id} roomPlatforms={room.platforms} />}
 
       <TabBar
         active={tab}

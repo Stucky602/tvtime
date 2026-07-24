@@ -299,7 +299,7 @@ export function buildDeck({
 
   return {
     phase: 'steady',
-    cards: interleave(personalized, spine),
+    cards: spreadSimilar(interleave(personalized, spine)),
     spineKeys,
     debugByKey,
   };
@@ -374,9 +374,70 @@ export function applyFilters(cards, filters) {
       if (!t.year || t.year < cutoff) return false;
     }
 
+    // ---- Exclusions, applied last so they always win ----
+    if (filters.excludeGenres?.length) {
+      if ((t.genres || []).some((g) => filters.excludeGenres.includes(g))) return false;
+    }
+    if (filters.maxRating && (t.vote_count ?? 0) >= 100 && (t.rating ?? 0) > filters.maxRating) {
+      return false;
+    }
+    if (filters.blocklist?.length) {
+      if (filters.blocklist.includes(`${t.tmdb_id}:${t.media_type}`)) return false;
+    }
+
     return true;
   });
 }
 
 /** Canonical Animation genre id, from component 4's mapping table. */
 const ANIME_GENRE_ID = 8;
+
+/**
+ * Deck diversity guard.
+ *
+ * Popularity-weighted scoring clusters hard: franchises release
+ * together, rate similarly, and share genres, so the top of a scored
+ * deck is routinely six Marvel films in a row. That reads as a broken
+ * recommender even when the scoring is working exactly as designed.
+ *
+ * This is deliberately a REORDER, not a re-score. Nothing is removed and
+ * no title's ranking changes in any meaningful sense -- adjacent
+ * near-duplicates are just pushed apart. Doing it in the scoring
+ * function instead would mean tuning a similarity penalty against five
+ * other weights, which is a much harder thing to reason about for a much
+ * smaller gain.
+ *
+ * Similarity proxy: shared primary genre, or a shared first word in the
+ * title (which catches "Iron Man 2" / "Iron Man 3" and most franchise
+ * naming without needing franchise data TMDB doesn't cheaply give us).
+ */
+function firstWord(title) {
+  return (title || '').trim().split(/[\s:]+/)[0]?.toLowerCase() || '';
+}
+
+function tooSimilar(a, b) {
+  if (!a || !b) return false;
+  if (firstWord(a.title) && firstWord(a.title) === firstWord(b.title)) return true;
+  const ga = (a.genres || [])[0];
+  const gb = (b.genres || [])[0];
+  return ga !== undefined && ga === gb;
+}
+
+export function spreadSimilar(cards, lookahead = 4) {
+  const out = [];
+  const pool = [...cards];
+  while (pool.length > 0) {
+    let pick = 0;
+    // Only look a short way ahead: the deck is score-ordered and we do
+    // not want a diversity rule quietly promoting a much worse title
+    // from deep in the list.
+    for (let i = 0; i < Math.min(lookahead, pool.length); i++) {
+      if (!tooSimilar(out[out.length - 1], pool[i])) {
+        pick = i;
+        break;
+      }
+    }
+    out.push(pool.splice(pick, 1)[0]);
+  }
+  return out;
+}

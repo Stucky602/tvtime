@@ -10,7 +10,7 @@
 import { supabase, rpc } from './supabase.js';
 
 const BUCKET_COLUMNS =
-  'tmdb_id,media_type,viewer_direction,bucket,rights,lefts,total_votes,member_count';
+  'viewer_id,tmdb_id,media_type,viewer_direction,bucket,rights,lefts,total_votes,member_count';
 
 const TITLE_COLUMNS =
   'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,providers,watch_link,trailer_key';
@@ -22,7 +22,19 @@ const TITLE_COLUMNS =
  * queries are easier to reason about than widening the view.
  */
 async function fetchBucket(bucket, { direction } = {}) {
-  let query = supabase.from('user_title_buckets').select(BUCKET_COLUMNS).eq('bucket', bucket);
+  // viewer_id filter is NOT optional. `user_title_buckets` has one row
+  // per VIEWER per title, so a Together match returns two rows -- yours
+  // and your partner's -- and the tab listed every match twice. This
+  // one missing predicate was the whole bug.
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return [];
+
+  let query = supabase
+    .from('user_title_buckets')
+    .select(BUCKET_COLUMNS)
+    .eq('bucket', bucket)
+    .eq('viewer_id', uid);
   if (direction) query = query.eq('viewer_direction', direction);
 
   const { data: rows, error } = await query;

@@ -7,6 +7,34 @@
 //   2. The swipe write path -- optimistic, idempotent, and offline-safe.
 
 import { supabase, rpc } from './supabase.js';
+
+/**
+ * Retry a Supabase call a couple of times with backoff.
+ *
+ * Every call in this app was previously one-shot: a single dropped
+ * packet on a phone with patchy signal turned into a visible error or a
+ * stuck spinner. Two retries at 400ms and 1200ms covers the common case
+ * (a brief dead zone) without making a genuine outage take ten seconds
+ * to report.
+ *
+ * Deliberately NOT applied to writes -- submit_swipe is idempotent and
+ * already has the offline queue, and blindly retrying a write is how you
+ * get duplicates in systems where that isn't true.
+ */
+export async function withRetry(fn, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, 400 * Math.pow(3, i)));
+      }
+    }
+  }
+  throw lastErr;
+}
 import { CONFIG } from './config.js';
 import { buildDeck } from './deck.js';
 
@@ -29,15 +57,25 @@ const DECK_KEY = 'flixpix.deck.v2';
 export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   const [{ data: swipes, error: swipeErr }, { data: watched, error: watchedErr }] =
     await Promise.all([
-      supabase.from('swipes').select('user_id,tmdb_id,media_type,direction,voted_at'),
+      supabase.from('swipes').select('user_id,tmdb_id,media_type,direction,voted_at,resurface_after'),
       supabase.from('watched').select('tmdb_id,media_type,verdict'),
     ]);
   if (swipeErr) throw swipeErr;
   if (watchedErr) throw watchedErr;
 
+  // A snoozed title is excluded only until its resurface_after passes.
+  // `resurface_after` has existed in the schema since day one for
+  // exactly this and nothing ever wrote to it until snooze shipped.
+  const nowMs = Date.now();
   const ownVoted = new Set(
     (swipes || [])
-      .filter((s) => s.user_id === userId)
+      .filter((s) => {
+        if (s.user_id !== userId) return false;
+        if (s.direction === 'snooze' && s.resurface_after) {
+          return new Date(s.resurface_after).getTime() > nowMs; // still snoozed
+        }
+        return true;
+      })
       .map((s) => `${s.tmdb_id}:${s.media_type}`)
   );
   const watchedKeys = new Set((watched || []).map((w) => `${w.tmdb_id}:${w.media_type}`));

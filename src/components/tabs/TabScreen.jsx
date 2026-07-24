@@ -14,11 +14,24 @@ import { fetchWatched } from '../../lib/tabs.js';
 // what's watched (that's a separate table), so the split happens here
 // on the client after both queries return.
 
-export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId, roomPlatforms, onTonightsPick }) {
+export default function TabScreen({
+  title,
+  emptyHead,
+  emptyBody,
+  fetcher,
+  roomId,
+  roomPlatforms,
+  onTonightsPick,
+  // When true this tab shows ONLY watched titles (the new Watched tab);
+  // otherwise watched titles are hidden entirely, because they now have
+  // a home of their own rather than a collapsed section at the bottom.
+  watchedOnly = false,
+}) {
   const [rows, setRows] = useState(null);
   const [watchedKeys, setWatchedKeys] = useState(new Map());
-  const [watchedOpen, setWatchedOpen] = useState(false);
   const [error, setError] = useState(null);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState('recent');
 
   const load = useCallback(async () => {
     try {
@@ -69,8 +82,22 @@ export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId
     return <div className="tabscreen tabscreen--loading" aria-busy="true" />;
   }
 
-  const active = rows.filter((t) => !watchedKeys.has(`${t.tmdb_id}:${t.media_type}`));
-  const watched = rows.filter((t) => watchedKeys.has(`${t.tmdb_id}:${t.media_type}`));
+  const inScope = rows.filter((t) => {
+    const isWatched = watchedKeys.has(`${t.tmdb_id}:${t.media_type}`);
+    return watchedOnly ? isWatched : !isWatched;
+  });
+
+  // Feature 6: at 100+ matches an append-only list is a wall. Search and
+  // sort make it navigable; both are local to already-fetched rows, so
+  // they're instant and cost no round trip.
+  const active = inScope
+    .filter((t) => (q.trim() ? t.title.toLowerCase().includes(q.trim().toLowerCase()) : true))
+    .sort((a, b) => {
+      if (sort === 'rating') return (b.rating ?? 0) - (a.rating ?? 0);
+      if (sort === 'runtime') return (a.runtime ?? 9999) - (b.runtime ?? 9999);
+      if (sort === 'title') return a.title.localeCompare(b.title);
+      return 0; // 'recent' -- server order, which is already newest-first
+    });
 
   return (
     <div className="tabscreen">
@@ -82,7 +109,39 @@ export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId
         </button>
       )}
 
-      {active.length === 0 && watched.length === 0 && (
+      {inScope.length > 6 && (
+        <div className="tabtools">
+          <input
+            className="tabtools__search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Search ${title.toLowerCase()}`}
+            aria-label={`Search ${title}`}
+          />
+          <div className="filter-row filter-row--wrap">
+            {[
+              ['recent', 'Recent'],
+              ['rating', 'Rating'],
+              ['runtime', 'Shortest'],
+              ['title', 'A-Z'],
+            ].map(([k, label]) => (
+              <button
+                key={k}
+                className={`filter-chip ${sort === k ? 'filter-chip--on' : ''}`}
+                onClick={() => setSort(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {q.trim() && active.length === 0 && inScope.length > 0 && (
+        <p className="settings__hint">Nothing here matches "{q.trim()}".</p>
+      )}
+
+      {inScope.length === 0 && (
         <div className="tabscreen__empty">
           <p className="empty__head">{emptyHead}</p>
           <p className="empty__body">{emptyBody}</p>
@@ -97,37 +156,13 @@ export default function TabScreen({ title, emptyHead, emptyBody, fetcher, roomId
               title={t}
               roomId={roomId}
               roomPlatforms={roomPlatforms}
-              watched={false}
+              watched={watchedOnly}
               onWatchedChange={(v) => handleWatchedChange(`${t.tmdb_id}:${t.media_type}`, v)}
             />
           ))}
         </ul>
       )}
 
-      {watched.length > 0 && (
-        <div className="watched-section">
-          <button className="watched-toggle" onClick={() => setWatchedOpen((o) => !o)}>
-            {watchedOpen ? 'Hide' : 'Show'} watched ({watched.length})
-          </button>
-          {watchedOpen && (
-            <ul className="rowlist rowlist--dim">
-              {watched.map((t) => {
-                const key = `${t.tmdb_id}:${t.media_type}`;
-                return (
-                  <TitleListItem
-                    key={key}
-                    title={t}
-                    roomId={roomId}
-                    watched
-                    verdict={watchedKeys.get(key)}
-                    onWatchedChange={(v) => handleWatchedChange(key, v)}
-                  />
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
+          </div>
   );
 }

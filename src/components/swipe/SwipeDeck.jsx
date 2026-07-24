@@ -73,7 +73,27 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   const [undoable, setUndoable] = useState(null);
   const [queuedNotice, setQueuedNotice] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Coach mark for the two non-obvious outcomes. Shown once ever --
+  // "Seen it" and "Later" fix a real modelling problem (see the
+  // seen/snooze migration) but only if people know they exist, and a
+  // button labelled "Later" does not explain itself.
+  const [showCoach, setShowCoach] = useState(() => {
+    try {
+      return !localStorage.getItem('flixpix.coach.outcomes.v1');
+    } catch {
+      return false;
+    }
+  });
+  const dismissCoach = () => {
+    try {
+      localStorage.setItem('flixpix.coach.outcomes.v1', '1');
+    } catch {
+      /* ignore */
+    }
+    setShowCoach(false);
+  };
 
+  const [showWhy, setShowWhy] = useState(false);
   const stackRef = useRef(null);
   const undoTimer = useRef(null);
   const crossedThreshold = useRef(false);
@@ -315,6 +335,23 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   const dx = leaving ? (leaving === 'right' ? 600 : -600) : drag.dx;
   const remaining = cards.length - index;
 
+  // Feature 8: "why this?". score_debug has been written on every swipe
+  // since the original build and nothing ever read it. Surfacing it
+  // costs almost nothing, makes the recommender feel accountable, and
+  // makes the weights tunable by observation instead of guesswork.
+  const dbg = debugByKey?.[`${current.tmdb_id}:${current.media_type}`];
+  const whyLines = [];
+  if (dbg) {
+    if (dbg.partner > 0) whyLines.push('Your partner has already voted on this one');
+    if (dbg.genre > 0.35) whyLines.push('It matches genres you usually say yes to');
+    if (dbg.verdict > 0.1) whyLines.push("It's in a genre you rated well after watching");
+    if (dbg.verdict < -0.1) whyLines.push('Similar to something you rated poorly — ranked lower');
+    if (dbg.quality > 0.7) whyLines.push('Rated highly by a lot of people');
+    if (dbg.pop > 0.6) whyLines.push('Popular right now');
+    if (dbg.recency > 0.7) whyLines.push('Released recently');
+    if (whyLines.length === 0) whyLines.push('Filling out your deck for variety');
+  }
+
   return (
     <div className="deck">
       <div className="deck__stack" ref={stackRef}>
@@ -377,6 +414,56 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
           Yes
         </button>
       </div>
+
+      {/* Distinct from a pass: neither of these is a taste signal, and
+          treating them as one was corrupting the recommender. */}
+      <div className="controls controls--secondary">
+        <button
+          className="ctl ctl--minor"
+          onClick={() => commit('seen')}
+          aria-label={`Mark ${current.title} as already seen`}
+        >
+          Seen it
+        </button>
+        <button
+          className="ctl ctl--minor"
+          onClick={() => commit('snooze')}
+          aria-label={`Show ${current.title} again later`}
+        >
+          Later
+        </button>
+        {debugByKey && (
+          <button
+            className="ctl ctl--minor"
+            onClick={() => setShowWhy((v) => !v)}
+            aria-label="Why am I seeing this?"
+          >
+            Why this?
+          </button>
+        )}
+      </div>
+
+      {showCoach && (
+        <div className="coach" role="note">
+          <p>
+            <strong>Seen it</strong> removes a title without telling us you
+            disliked it. <strong>Later</strong> brings it back in a few weeks.
+            Using these instead of Pass keeps your recommendations honest.
+          </p>
+          <button className="coach__ok" onClick={dismissCoach}>Got it</button>
+        </div>
+      )}
+
+      {showWhy && whyLines.length > 0 && (
+        <div className="why" role="note">
+          <p className="why__head shout">Why you're seeing this</p>
+          <ul>
+            {whyLines.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Update 5: how much is left, so an empty deck is never a surprise. */}
       <p className="deck__progress">

@@ -13,6 +13,7 @@ const TABS = [
   { id: 'together', label: 'Together' },
   { id: 'solo', label: 'Solo' },
   { id: 'pending', label: 'Pending' },
+  { id: 'watched', label: 'Watched' },
 ];
 
 export default function TabBar({ active, onChange, userId, tabSeenAt, refreshToken }) {

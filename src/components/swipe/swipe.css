@@ -643,3 +643,83 @@
   border-radius: var(--radius-control);
   box-shadow: var(--shadow-hard-sm);
 }
+
+/* ---- Secondary outcomes: Seen it / Later / Why this ---- */
+
+.controls--secondary {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.ctl--minor {
+  min-height: 40px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+/* ---- Coach mark (discoverability for the new outcomes) ---- */
+
+.coach {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--pop-cyan);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.coach p {
+  margin: 0;
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--line);
+}
+
+.coach__ok {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 8px 12px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper);
+  background: var(--line);
+  border-radius: 6px;
+  min-height: 38px;
+}
+
+/* ---- "Why this?" ---- */
+
+.why {
+  padding: 12px;
+  background: var(--panel);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.why__head {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--pop-yellow);
+}
+
+.why ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
