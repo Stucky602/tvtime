@@ -27,6 +27,14 @@ on:
     - cron: '0 12 */4 * *'
   workflow_dispatch:
 
+# Two keep-warm runs must never overlap: both push a commit, and the
+# second one would fail with a non-fast-forward. Queued, not cancelled,
+# because the Supabase ping is the point of the job and cancelling it
+# defeats the whole purpose.
+concurrency:
+  group: keep-warm
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -69,6 +77,35 @@ jobs:
           if git diff --cached --quiet; then
             echo "Nothing to commit (unexpected -- timestamp should always differ)."
           else
-            git commit -m "chore: heartbeat ($(cat .github/heartbeat.txt))"
-            git push
+            # [skip ci] keeps this commit from triggering the deploy
+            # workflow. Without it, every heartbeat kicked off a full
+            # Pages build of unchanged code -- and worse, deploy.yml
+            # uses cancel-in-progress, so a heartbeat landing seconds
+            # after a real push would CANCEL that push's deploy. That is
+            # the collision showing up in the Actions tab.
+            git commit -m "chore: heartbeat ($(cat .github/heartbeat.txt)) [skip ci]"
+
+            # The checkout can be behind if someone pushed while this
+            # job was running, which makes a bare push fail. Rebase and
+            # retry a couple of times.
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push; then
+                pushed=true
+                break
+              fi
+              echo "Push attempt $attempt failed; rebasing onto origin and retrying."
+              git pull --rebase origin main || true
+              sleep 3
+            done
+
+            # A failed heartbeat is worth knowing about but is NOT worth
+            # failing the job over. The Supabase ping already succeeded
+            # by this point, which is the thing that actually keeps the
+            # project alive. Failing here would turn a cosmetic problem
+            # into a red X every four days.
+            if [ "$pushed" = false ]; then
+              echo "::warning::Heartbeat commit could not be pushed after 3 attempts."
+              echo "The Supabase ping succeeded, so the project is still awake."
+            fi
           fi

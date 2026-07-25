@@ -25,6 +25,13 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # The keep-warm job commits a timestamp here every four days. Without
+    # this, each heartbeat triggered a full rebuild and redeploy of
+    # completely unchanged code -- and because this workflow uses
+    # cancel-in-progress, a heartbeat landing shortly after a real push
+    # would cancel that push's deploy outright.
+    paths-ignore:
+      - '.github/heartbeat.txt'
   # Lets you trigger a redeploy by hand from the Actions tab without
   # needing a new commit -- useful right after changing Pages settings.
   workflow_dispatch:

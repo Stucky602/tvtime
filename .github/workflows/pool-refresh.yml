@@ -23,9 +23,16 @@ permissions:
 
 concurrency:
   # A manual run and the nightly cron overlapping would double-throttle
-  # against TMDB's rate limit for no benefit -- let the newer one win.
+  # against TMDB's rate limit for no benefit.
+  #
+  # QUEUED, not cancelled. The original setting cancelled the older run,
+  # which sounds tidier and is wrong here: the job writes to the database
+  # in batches, so killing it partway leaves a half-finished refresh AND
+  # shows up as a cancelled run in the Actions tab, which is easy to read
+  # as a failure. Letting the second run wait costs a few minutes and
+  # leaves the data consistent.
   group: pool-refresh
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   refresh:
