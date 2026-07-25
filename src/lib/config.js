@@ -158,6 +158,18 @@ export function posterUrl(path, size = 'w500') {
  * enhancement: absent the API everyone gets w500, which is a better
  * default than w780 anyway at typical card sizes.
  */
+/**
+ * Wide still from the film itself.
+ *
+ * `backdrop_path` has been fetched and stored on every title since the
+ * original build and rendered precisely nowhere. It is the one piece of
+ * free imagery the app already owns, and it is the right shape for the
+ * letterboxed space either side of a 2:3 poster.
+ */
+export function backdropUrl(path, size = 'w780') {
+  return path ? `${TMDB_IMAGE_BASE}/${size}${path}` : null;
+}
+
 export function adaptivePosterSize() {
   try {
     const c = navigator.connection;

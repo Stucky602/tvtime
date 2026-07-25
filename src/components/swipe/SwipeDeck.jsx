@@ -5,6 +5,7 @@ import { submitSwipe, undoSwipe } from '../../lib/data.js';
 import { hapticThreshold, hapticCommit, hapticUndo, hapticMatch } from '../../lib/haptics.js';
 import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
 import SecretPanel from './SecretPanel.jsx';
+import { guess } from '../../lib/predictions.js';
 import { loadSecret, zoneFor, sequencesMatch, pruneTaps } from '../../lib/secret-gesture.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §6 (whole section), §5.3, §9
@@ -67,7 +68,7 @@ import { loadSecret, zoneFor, sequencesMatch, pruneTaps } from '../../lib/secret
 // the instantaneous flick is what the user actually did.
 const VELOCITY_WINDOW_MS = 80;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret, askGuess, roomId, userId, partnerName }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -99,6 +100,11 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   // Secret gesture. Taps accumulate only while they are recent, and are
   // compared against a sequence that never leaves this device.
   const [secretOpen, setSecretOpen] = useState(false);
+  // Prediction. Offered on roughly one card in six, and only where the
+  // answer is actually unknown -- a prompt on every card would turn
+  // swiping into a quiz, which is a good way to kill the thing people
+  // like about swiping.
+  const [guessed, setGuessed] = useState(null);
   const secretTaps = useRef([]);
   const stackRef = useRef(null);
   const undoTimer = useRef(null);
@@ -141,6 +147,10 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   useEffect(() => {
     setIndex(0);
   }, [resetKey]);
+
+  useEffect(() => {
+    setGuessed(null);
+  }, [index]);
 
   // Collapse an expanded synopsis whenever the card changes -- carrying
   // the expanded state onto the next title would hide its poster for no
@@ -484,6 +494,46 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
         </button>
       </div>
 
+      {askGuess?.(current) && !guessed && (
+        <div className="predict">
+          <p className="predict__q">
+            Before you vote: what will {partnerName || 'they'} say?
+          </p>
+          <div className="predict__opts">
+            <button
+              className="predict__btn"
+              onClick={() => {
+                setGuessed('right');
+                guess({
+                  roomId, tmdbId: current.tmdb_id, mediaType: current.media_type,
+                  userId, direction: 'right',
+                }).catch(() => {});
+              }}
+            >
+              Yes
+            </button>
+            <button
+              className="predict__btn"
+              onClick={() => {
+                setGuessed('left');
+                guess({
+                  roomId, tmdbId: current.tmdb_id, mediaType: current.media_type,
+                  userId, direction: 'left',
+                }).catch(() => {});
+              }}
+            >
+              Pass
+            </button>
+          </div>
+        </div>
+      )}
+
+      {guessed && (
+        <p className="predict__done">
+          Guessed. You'll find out when they get to it.
+        </p>
+      )}
+
       {/* Distinct from a pass: neither of these is a taste signal, and
           treating them as one was corrupting the recommender. */}
       <div className="controls controls--secondary">
@@ -537,7 +587,12 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
       {/* Update 5: how much is left, so an empty deck is never a surprise. */}
       <p
         className="deck__progress"
-        onClick={onKnock}
+        // pointerdown, not click. On iOS, rapid tapping a non-interactive
+        // element triggers double-tap-to-zoom heuristics, which delays
+        // and sometimes swallows click events entirely -- so seven fast
+        // taps would register as three or four. pointerdown fires
+        // immediately and is not subject to that.
+        onPointerDown={onKnock}
       >
         {remaining} {remaining === 1 ? 'title' : 'titles'} left
         {undoable && <span className="deck__undohint"> · undo available</span>}

@@ -80,7 +80,7 @@ export function fetchPending() {
 export async function fetchWatched(roomId) {
   const { data: rows, error } = await supabase
     .from('watched')
-    .select('tmdb_id,media_type,verdict,marked_at,status,started_on,watched_on,progress_note')
+    .select('tmdb_id,media_type,verdict,marked_at,status,started_on,watched_on,progress_note,company,marked_by')
     .eq('room_id', roomId)
     .order('marked_at', { ascending: false });
   if (error) throw error;
@@ -108,7 +108,19 @@ export async function fetchWatched(roomId) {
  * policies already scope writes to room members, so a direct update is
  * both correct and simpler than widening the function signature.
  */
-export async function setWatchStatus({ roomId, tmdbId, mediaType, userId, status, verdict, progressNote }) {
+/** Title rows for a set of `tmdb_id:media_type` keys. */
+export async function fetchTitlesByKeys(keys) {
+  const ids = [...new Set((keys || []).map((k) => Number(k.split(':')[0])))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('titles')
+    .select(TITLE_COLUMNS)
+    .in('tmdb_id', ids);
+  if (error) throw error;
+  return new Map((data || []).map((t) => [`${t.tmdb_id}:${t.media_type}`, t]));
+}
+
+export async function setWatchStatus({ roomId, tmdbId, mediaType, userId, status, verdict, progressNote, company }) {
   const now = new Date();
   const row = {
     room_id: roomId,
@@ -123,11 +135,26 @@ export async function setWatchStatus({ roomId, tmdbId, mediaType, userId, status
   if (status === 'finished') row.watched_on = now.toISOString().slice(0, 10);
   if (verdict !== undefined) row.verdict = verdict;
   if (progressNote !== undefined) row.progress_note = progressNote;
+  if (company !== undefined) row.company = company;
 
   const { error } = await supabase
     .from('watched')
     .upsert(row, { onConflict: 'room_id,tmdb_id,media_type' });
   if (error) throw error;
+
+  // Also record the verdict against the PERSON. The room-scoped column
+  // above stays for anything still reading it, but one person's opinion
+  // was being stored as the couple's and fed both decks, which is the
+  // recommender learning the wrong thing about one of you.
+  if (verdict === 'up' || verdict === 'down') {
+    await supabase.from('watch_verdicts').upsert(
+      {
+        room_id: roomId, tmdb_id: tmdbId, media_type: mediaType,
+        user_id: userId, verdict, rated_at: new Date().toISOString(),
+      },
+      { onConflict: 'room_id,tmdb_id,media_type,user_id' }
+    );
+  }
 }
 
 export function markWatched(tmdb_id, media_type, verdict) {

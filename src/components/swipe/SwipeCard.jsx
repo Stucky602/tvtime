@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { posterUrl, adaptivePosterSize } from '../../lib/config.js';
+import { posterUrl, adaptivePosterSize, backdropUrl } from '../../lib/config.js';
 import { watchTarget, trailerEmbedUrl } from '../../lib/links.js';
 
 // FlixPix card.
@@ -31,6 +31,7 @@ export default function SwipeCard({
   const [posterFailed, setPosterFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const poster = posterUrl(title.poster_path, adaptivePosterSize());
+  const backdrop = backdropUrl(title.backdrop_path);
   const trailer = trailerEmbedUrl(title.trailer_key);
   const watch = watchTarget(title, roomPlatforms);
 
@@ -58,6 +59,16 @@ export default function SwipeCard({
           vertical scrolling here while the deck owns horizontal swipes. */}
       <div className="card__scroll">
         <div className="card__art">
+          {/* Fills the space either side of a 2:3 poster with a still
+              from the film. Previously flat dark, and the image was
+              already in the database. */}
+          {backdrop && !playing && (
+            <div
+              className="card__backdrop"
+              style={{ backgroundImage: `url(${backdrop})` }}
+              aria-hidden="true"
+            />
+          )}
           {playing && trailer ? (
             <iframe
               className="card__trailer"

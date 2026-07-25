@@ -3,6 +3,7 @@ import { posterUrl, CONFIG } from '../../lib/config.js';
 import { markWatched, unmarkWatched, setWatchStatus } from '../../lib/tabs.js';
 import { commitmentLabel, commitmentTier, STATUS, STATUS_LABEL } from '../../lib/lifecycle.js';
 import { addNote } from '../../lib/notes.js';
+import { addPlan } from '../../lib/plans.js';
 import { KIND } from '../../lib/notes-pure.js';
 import { watchTarget } from '../../lib/links.js';
 
@@ -20,21 +21,6 @@ export default function TitleListItem({
 }) {
   const [showToast, setShowToast] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const commitWatch = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      // §2.4 v0.4: the mark completes immediately and unconditionally --
-      // the toast is what's optional, not the mark itself.
-      await markWatched(title.tmdb_id, title.media_type, null);
-      onWatchedChange?.(true);
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), CONFIG.VERDICT_TOAST_SECONDS * 1000);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const sendNote = async (kind) => {
     const prompt = kind === KIND.BOOST
@@ -54,13 +40,13 @@ export default function TitleListItem({
     }
   };
 
-  const transition = async (status) => {
+  const transition = async (status, company) => {
     if (busy) return;
     setBusy(true);
     try {
       await setWatchStatus({
         roomId, tmdbId: title.tmdb_id, mediaType: title.media_type,
-        userId, status,
+        userId, status, company,
       });
       onStatusChange?.(status);
       // Only a finish is worth asking about. Nobody wants to rate
@@ -169,10 +155,21 @@ export default function TitleListItem({
             <button
               className="row__action"
               disabled={busy}
-              onClick={() => commitWatch()}
-              aria-label={`Mark ${title.title} as finished`}
+              onClick={() => transition(STATUS.FINISHED, 'together')}
+              aria-label={`Mark ${title.title} as finished together`}
             >
               Finished
+            </button>
+            {/* Solo watches used to vanish. `watched` is room-scoped, so
+                a film watched alone had nowhere to go, which made Solo
+                the one tab with no follow-through. */}
+            <button
+              className="row__action row__action--minor"
+              disabled={busy}
+              onClick={() => transition(STATUS.FINISHED, 'alone')}
+              aria-label={`Mark ${title.title} as watched alone`}
+            >
+              Alone
             </button>
           </>
         )}
@@ -197,6 +194,30 @@ export default function TitleListItem({
         {/* The note primitive, surfaced as the two things people
             actually want to say. Both are the same row in the same
             table; only the presentation differs. */}
+        {!watchRow && userId && (
+          <button
+            className="row__action row__action--plan"
+            disabled={busy}
+            onClick={async () => {
+              const when = window.prompt(
+                'When? Leave blank for tonight, or YYYY-MM-DD for an occasion.'
+              );
+              if (when === null) return;
+              setBusy(true);
+              try {
+                await addPlan({
+                  roomId, tmdbId: title.tmdb_id, mediaType: title.media_type,
+                  userId, plannedFor: /^\d{4}-\d{2}-\d{2}$/.test(when.trim()) ? when.trim() : null,
+                });
+                onStatusChange?.('planned');
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Plan it
+          </button>
+        )}
         {!watchRow && userId && (
           <>
             <button

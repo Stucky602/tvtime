@@ -353,7 +353,29 @@ export function applyFilters(cards, filters) {
     // episode_run_time is frequently missing (§4.3), and silently
     // hiding every show with no runtime would gut the TV side of the
     // deck for a filter the user thinks only affects length.
-    if (filters.maxRuntime && t.runtime && t.runtime > filters.maxRuntime) return false;
+    //
+    // TV IS THE INTERESTING CASE, and the old behaviour was a lie.
+    // `runtime` for a series is the length of ONE EPISODE, so "under 90
+    // minutes" matched a 45-minute episode of a sixty-hour show. The
+    // filter said quick and delivered a nine-week commitment.
+    //
+    // Now a series only passes a runtime cap if its TOTAL is plausibly
+    // a single sitting. Anything longer is not a short watch by any
+    // reading of the phrase, whatever one episode happens to run.
+    if (filters.maxRuntime) {
+      if (t.media_type === 'tv') {
+        const eps = t.episode_count;
+        if (eps && t.runtime) {
+          const total = eps * t.runtime;
+          // A limited series you could finish in a couple of evenings
+          // still counts as short; a long-running show does not.
+          if (total > filters.maxRuntime * 4) return false;
+        }
+        // Unknown episode count stays, consistent with unknown runtime.
+      } else if (t.runtime && t.runtime > filters.maxRuntime) {
+        return false;
+      }
+    }
 
     // --- Minimum rating ---
     // Same reasoning: an unrated title is unknown, not bad. But a

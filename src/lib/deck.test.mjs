@@ -554,6 +554,36 @@ test('new filters: anime, runtime, rating, service, language, recency', () => {
   assert.ok(!recent.includes(10), '2019 title excluded');
 });
 
+test('THE TV RUNTIME LIE: a short episode of a long show is not a short watch', () => {
+  const film = makeTitle(30, [3], { year: 2020 });
+  film.media_type = 'movie'; film.runtime = 88; film.original_language = 'en';
+
+  // 45-minute episodes, 120 of them. Ninety hours total.
+  const longShow = makeTitle(31, [3], { year: 2020 });
+  longShow.media_type = 'tv'; longShow.runtime = 45; longShow.episode_count = 120;
+  longShow.original_language = 'en';
+
+  // A six-part limited series. Under five hours, so still a short watch.
+  const limited = makeTitle(32, [3], { year: 2022 });
+  limited.media_type = 'tv'; limited.runtime = 45; limited.episode_count = 6;
+  limited.original_language = 'en';
+
+  const out = applyFilters([film, longShow, limited], { maxRuntime: 90 })
+    .map((t) => t.tmdb_id);
+
+  assert.ok(out.includes(30), 'an 88-minute film passes');
+  assert.ok(!out.includes(31),
+    'a 90-hour series must NOT pass a 90-minute filter just because one episode is 45 minutes');
+  assert.ok(out.includes(32), 'a short limited series is still a short watch');
+});
+
+test('a TV show with unknown episode count is kept, not hidden', () => {
+  const unknown = makeTitle(33, [3], { year: 2020 });
+  unknown.media_type = 'tv'; unknown.runtime = 45; unknown.original_language = 'en';
+  const out = applyFilters([unknown], { maxRuntime: 90 }).map((t) => t.tmdb_id);
+  assert.deepEqual(out, [33], 'missing data is not evidence of a long show');
+});
+
 test('filters intersect rather than union', () => {
   const a = makeTitle(20, [2], { year: 2023 });
   a.original_language = 'en'; a.runtime = 95; a.providers = ['netflix'];

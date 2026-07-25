@@ -55,10 +55,17 @@ const DECK_KEY = 'flixpix.deck.v2';
  * would pull a lot of text nobody reads until they tap a card.
  */
 export async function fetchDeckInputs({ userId, platforms, includeReality }) {
-  const [{ data: swipes, error: swipeErr }, { data: watched, error: watchedErr }] =
-    await Promise.all([
+  const [
+    { data: swipes, error: swipeErr },
+    { data: watched, error: watchedErr },
+    { data: verdictRows },
+  ] = await Promise.all([
       supabase.from('swipes').select('user_id,tmdb_id,media_type,direction,voted_at,resurface_after'),
       supabase.from('watched').select('tmdb_id,media_type,verdict'),
+      // Per-person verdicts. The room-scoped column above conflated
+      // both people's opinions into one, so the deck was learning from
+      // ratings that may not have been yours at all.
+      supabase.from('watch_verdicts').select('tmdb_id,media_type,user_id,verdict'),
     ]);
   if (swipeErr) throw swipeErr;
   if (watchedErr) throw watchedErr;
@@ -83,7 +90,7 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
   let query = supabase
     .from('titles')
     .select(
-      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language,trailer_key,watch_link,keyword_ids,cast_ids,cast_names,director_ids,director_names,episode_count,season_count'
+      'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,popularity,genres,providers,is_reality,original_language,trailer_key,watch_link,keyword_ids,cast_ids,cast_names,director_ids,director_names,episode_count,season_count,backdrop_path'
     )
     .eq('excluded', false)
     .order('popularity', { ascending: false })
@@ -131,7 +138,18 @@ export async function fetchDeckInputs({ userId, platforms, includeReality }) {
     historyTitles = hist || [];
   }
 
-  return { candidates, allSwipes: swipes || [], historyTitles, watchedRows: watched || [] };
+  // Only MY verdicts feed my deck. Falls back to the old room-scoped
+  // column when the attributed table is empty, so a database that has
+  // not run the migration yet still behaves exactly as before.
+  const mine = (verdictRows || []).filter((v) => v.user_id === userId);
+  const effectiveVerdicts = mine.length > 0 ? mine : (watched || []);
+
+  return {
+    candidates,
+    allSwipes: swipes || [],
+    historyTitles,
+    watchedRows: effectiveVerdicts,
+  };
 }
 
 // ---------------------------------------------------------------------

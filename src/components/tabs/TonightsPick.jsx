@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { posterUrl } from '../../lib/config.js';
 import { watchTarget } from '../../lib/links.js';
 import { hapticCommit, hapticMatch } from '../../lib/haptics.js';
+import { recordPick } from '../../lib/picks.js';
+import { addPlan } from '../../lib/plans.js';
 
 // Feature 1: Tonight's Pick.
 //
@@ -30,7 +32,7 @@ function shuffle(arr) {
   return a;
 }
 
-export default function TonightsPick({ candidates, roomPlatforms, onClose }) {
+export default function TonightsPick({ candidates, roomPlatforms, roomId, userId, onClose, onPlanned }) {
   // Seeded once per open, so the field doesn't reshuffle on re-render.
   const [round, setRound] = useState(() => shuffle(candidates).slice(0, FIELD_SIZE));
   const [nextRound, setNextRound] = useState([]);
@@ -47,6 +49,19 @@ export default function TonightsPick({ candidates, roomPlatforms, onClose }) {
 
   const choose = (pickedTitle) => {
     hapticCommit();
+
+    // Record the head-to-head. This is the strongest preference signal
+    // the app can collect and it used to be discarded the instant the
+    // bracket advanced: a swipe says a title cleared some private bar,
+    // a head-to-head says which of two specific things you wanted more.
+    const other = pickedTitle === a ? b : a;
+    if (roomId && userId && other) {
+      recordPick({ roomId, userId, winner: pickedTitle, loser: other }).catch(() => {
+        // Never let a failed write interrupt the bracket. The comparison
+        // is valuable, the session is more so.
+      });
+    }
+
     const advanced = [...nextRound, pickedTitle];
     const isLastPairInRound = (pair + 1) * 2 >= round.length;
 
@@ -112,6 +127,24 @@ export default function TonightsPick({ candidates, roomPlatforms, onClose }) {
               {target.label}
             </a>
           )}
+          {/* The whole point of the bracket. Before this, it named a
+              winner and then dropped it, which is why it felt like a
+              toy rather than a decision. */}
+          <button
+            className="onboard-btn onboard-btn--primary"
+            onClick={async () => {
+              if (roomId && userId) {
+                await addPlan({
+                  roomId, tmdbId: winner.tmdb_id,
+                  mediaType: winner.media_type, userId,
+                }).catch(() => {});
+              }
+              onPlanned?.(winner);
+            }}
+          >
+            That's the plan
+          </button>
+
           <button
             className="onboard-btn"
             onClick={() => {

@@ -687,3 +687,8 @@
 }
 
 .secret-ours h2 { color: #ff8ec7; }
+
+.row__action--plan {
+  background: var(--pop-yellow);
+  color: var(--line);
+}

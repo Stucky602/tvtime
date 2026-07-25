@@ -618,3 +618,121 @@ begin
   end;
   raise notice 'PASS: direction constraint still rejects unknown values';
 end $$;
+
+-- =====================================================================
+-- Decisions and the feedback loop.
+--
+-- The riskiest piece here is the prediction trigger: it fires on every
+-- swipe insert and update, so a mistake in it corrupts the single
+-- hottest write path in the app. It also must NOT resolve a guess from
+-- the guesser's own vote, which is the obvious way to get a system that
+-- scores 100%.
+-- =====================================================================
+
+do $$
+declare
+  v_code text;
+  v_a uuid := 'ee000000-0000-0000-0000-00000000ba01';
+  v_b uuid := 'ee000000-0000-0000-0000-00000000ba02';
+  v_room uuid;
+  v_correct boolean;
+  v_resolved timestamptz;
+  v_n int;
+begin
+  insert into auth.users (id) values (v_a), (v_b);
+  insert into titles (tmdb_id, media_type, title) values
+    (700700, 'movie', 'Guess A'), (700701, 'movie', 'Guess B'),
+    (700702, 'movie', 'Planned')
+    on conflict do nothing;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select (create_room('A', array['netflix'], '1357') -> 'room' ->> 'code') into v_code;
+  select id into v_room from rooms where code = v_code;
+
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform join_room(v_code, '1357', 'B');
+
+  -- A guesses that B will say yes.
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  insert into predictions (room_id, tmdb_id, media_type, guesser_id, guess)
+    values (v_room, 700700, 'movie', v_a, 'right');
+
+  -- A's OWN vote must not resolve A's guess about B.
+  perform submit_swipe(700700, 'movie', 'right');
+  select resolved_at into v_resolved from predictions
+    where room_id = v_room and tmdb_id = 700700 and guesser_id = v_a;
+  if v_resolved is not null then
+    raise exception 'FAIL: a guess was resolved by the guesser''s own vote';
+  end if;
+  raise notice 'PASS: your own vote does not resolve your guess about them';
+
+  -- B votes right. Now it resolves, correctly.
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform submit_swipe(700700, 'movie', 'right');
+  select was_correct into v_correct from predictions
+    where room_id = v_room and tmdb_id = 700700 and guesser_id = v_a;
+  if v_correct is not true then
+    raise exception 'FAIL: correct guess not scored as correct';
+  end if;
+  raise notice 'PASS: a partner vote resolves the guess and scores it';
+
+  -- A wrong guess scores wrong.
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  insert into predictions (room_id, tmdb_id, media_type, guesser_id, guess)
+    values (v_room, 700701, 'movie', v_a, 'right');
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform submit_swipe(700701, 'movie', 'left');
+  select was_correct into v_correct from predictions
+    where room_id = v_room and tmdb_id = 700701 and guesser_id = v_a;
+  if v_correct is not false then
+    raise exception 'FAIL: wrong guess not scored as wrong';
+  end if;
+  raise notice 'PASS: a wrong guess is scored wrong';
+
+  -- Secret and seen votes must not resolve a prediction: they are not
+  -- an answer to "will they say yes".
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  insert into predictions (room_id, tmdb_id, media_type, guesser_id, guess)
+    values (v_room, 700702, 'movie', v_a, 'right');
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform submit_swipe(700702, 'movie', 'seen');
+  select resolved_at into v_resolved from predictions
+    where room_id = v_room and tmdb_id = 700702 and guesser_id = v_a;
+  if v_resolved is not null then
+    raise exception 'FAIL: a "seen" vote resolved a prediction';
+  end if;
+  raise notice 'PASS: seen and secret votes do not resolve predictions';
+
+  -- Plans: one live plan per title.
+  insert into plans (room_id, tmdb_id, media_type, created_by)
+    values (v_room, 700702, 'movie', v_b);
+  begin
+    insert into plans (room_id, tmdb_id, media_type, created_by)
+      values (v_room, 700702, 'movie', v_a);
+    raise exception 'FAIL: a duplicate live plan was allowed';
+  exception when unique_violation then
+    null;
+  end;
+
+  -- But cancelling one frees the slot, or you could never re-plan.
+  update plans set status = 'cancelled', resolved_at = now()
+    where room_id = v_room and tmdb_id = 700702;
+  insert into plans (room_id, tmdb_id, media_type, created_by)
+    values (v_room, 700702, 'movie', v_a);
+  select count(*) into v_n from plans where room_id = v_room and status = 'planned';
+  if v_n <> 1 then
+    raise exception 'FAIL: expected exactly one live plan, got %', v_n;
+  end if;
+  raise notice 'PASS: one live plan per title, and cancelling frees the slot';
+
+  -- Verdicts are per person, not per room.
+  insert into watch_verdicts (room_id, tmdb_id, media_type, user_id, verdict)
+    values (v_room, 700700, 'movie', v_a, 'up'),
+           (v_room, 700700, 'movie', v_b, 'down');
+  select count(*) into v_n from watch_verdicts
+    where room_id = v_room and tmdb_id = 700700;
+  if v_n <> 2 then
+    raise exception 'FAIL: two people should hold two separate verdicts, got %', v_n;
+  end if;
+  raise notice 'PASS: each person holds their own verdict on the same title';
+end $$;

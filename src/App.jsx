@@ -6,6 +6,7 @@ import TonightsPick from './components/tabs/TonightsPick.jsx';
 import Stats from './components/tabs/Stats.jsx';
 import StatusScreen from './components/tabs/StatusScreen.jsx';
 import Recap from './components/tabs/Recap.jsx';
+import RateQueue from './components/tabs/RateQueue.jsx';
 import SecretScreen from './components/tabs/SecretScreen.jsx';
 import SecretSetup from './components/swipe/SecretSetup.jsx';
 import { hasSecret } from './lib/secret-gesture.js';
@@ -139,6 +140,13 @@ export default function App() {
         <TonightsPick
           candidates={pickCandidates}
           roomPlatforms={roomState.room.platforms}
+          roomId={roomState.room.id}
+          userId={roomState.user.id}
+          onPlanned={() => {
+            // Straight back to the deck, where the banner now shows it.
+            setOverlay(null);
+            setTab('swipe');
+          }}
           onClose={() => setOverlay(null)}
         />
       </div>
@@ -164,6 +172,18 @@ export default function App() {
           partner={roomState.partner}
           onClose={() => setOverlay(null)}
           onReset={() => setOverlay(null)}
+        />
+      </div>
+    );
+  }
+
+  if (overlay === 'rate') {
+    return (
+      <div className="app">
+        <RateQueue
+          room={roomState.room}
+          user={roomState.user}
+          onClose={() => setOverlay(null)}
         />
       </div>
     );
@@ -242,6 +262,7 @@ export default function App() {
           onOpenSettings={() => setShowSettings(true)}
           onOpenStats={() => setOverlay('stats')}
           onOpenRecap={() => setOverlay('recap')}
+          onOpenRate={() => setOverlay('rate')}
           onOpenSecret={() => setOverlay('secret')}
           // Seven taps on the counter. If a pattern already exists this
           // opens the lists rather than making you set it up twice.

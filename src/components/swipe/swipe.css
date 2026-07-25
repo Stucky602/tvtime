@@ -416,6 +416,15 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-faint);
+  /* An 11px line of text is a ~14px tap target, which is far too small
+     to hit seven times in a row on a phone. Padding gives it a real
+     44px target while the text itself stays the same size. */
+  padding: 14px 0;
+  /* Stops iOS treating fast repeat taps as double-tap-to-zoom, which
+     was delaying and dropping the events. */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .deck__undohint {
@@ -944,4 +953,146 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #e8b4ff;
+}
+
+/* ---- Tonight ---- */
+
+.tonight {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+  margin: 10px 14px 0;
+  padding: 10px;
+  background: var(--pop-yellow);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.tonight__art {
+  width: 54px;
+  flex-shrink: 0;
+  aspect-ratio: 2 / 3;
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  background: #000;
+}
+
+.tonight__art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.tonight__body { flex: 1; min-width: 0; }
+
+.tonight__label {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--line);
+  opacity: 0.7;
+}
+
+.tonight__title {
+  margin: 1px 0 4px;
+  font-size: 17px;
+  line-height: 1.1;
+  color: var(--line);
+}
+
+.tonight__note {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--line);
+  opacity: 0.85;
+}
+
+.tonight__actions { display: flex; gap: 6px; }
+
+.tonight__btn {
+  min-height: 34px;
+  padding: 0 11px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--paper);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 6px;
+}
+
+.tonight__btn--go { background: var(--pop-cyan); }
+.tonight__btn:active { transform: translate(2px, 2px); }
+
+/* ---- Prediction ---- */
+
+.predict {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--pop-cyan);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.predict__q {
+  margin: 0;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--line);
+}
+
+.predict__opts { display: flex; gap: 6px; }
+
+.predict__btn {
+  min-height: 34px;
+  padding: 0 13px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--paper);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 6px;
+}
+
+.predict__btn:active { transform: translate(2px, 2px); }
+
+.predict__done {
+  flex-shrink: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pop-cyan);
+}
+
+/* Backdrop behind the poster. Heavily blurred and dimmed so it reads as
+   atmosphere rather than as a second image competing with the poster. */
+.card__backdrop {
+  position: absolute;
+  inset: -20px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(26px) saturate(1.3) brightness(0.45);
+  z-index: 0;
+}
+
+.card__art img,
+.card__noart,
+.card__scrim,
+.card__scrollcue,
+.card__play {
+  position: relative;
+  z-index: 1;
 }

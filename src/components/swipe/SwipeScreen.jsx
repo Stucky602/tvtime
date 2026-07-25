@@ -16,6 +16,12 @@ import IntentBar from './IntentBar.jsx';
 import { findIntent, filterByCommitment } from '../../lib/intent.js';
 import { commitmentHours } from '../../lib/lifecycle.js';
 import { hasSecret } from '../../lib/secret-gesture.js';
+import { hapticThreshold, hapticMatch } from '../../lib/haptics.js';
+import TonightBanner from './TonightBanner.jsx';
+import { fetchPlans } from '../../lib/plans.js';
+import { tonightPlan } from '../../lib/plans-pure.js';
+import { fetchTitlesByKeys } from '../../lib/tabs.js';
+import { fetchMyPredictions } from '../../lib/predictions.js';
 import { updateSessionPresets } from '../../lib/room.js';
 import { CONFIG } from '../../lib/config.js';
 import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
@@ -25,7 +31,7 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, onOpenSecret, onKnockComplete, presentPartners = [], liveConnection = false }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, onOpenRate, onOpenSecret, onKnockComplete, presentPartners = [], liveConnection = false }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -34,12 +40,20 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
   const [loadError, setLoadError] = useState(null);
   const [activity, setActivity] = useState(null);
   const [intentId, setIntentId] = useState(null);
-  // Hidden entry point. Seven deliberate taps on the titles-left counter
-  // within a few seconds. Chosen because the counter is always on screen,
-  // is not a button, and nobody taps a status line by accident -- so it
-  // is findable if you have been told and invisible if you have not.
-  const [knock, setKnock] = useState({ n: 0, at: 0 });
+  // Hidden entry point. Seven deliberate taps on the titles-left counter.
+  //
+  // A REF, not state. State was the original bug: each tap read `knock`
+  // from a closure captured at render time, and seven taps in under two
+  // seconds fire faster than React re-renders, so several taps in a row
+  // all read the same stale count and the total never climbed past two
+  // or three. A ref is written and read synchronously, which is what a
+  // counter like this actually needs.
+  const knock = useRef({ n: 0, at: 0 });
   const [presets, setPresets] = useState(user?.session_presets || []);
+  const [plan, setPlan] = useState(null);
+  const [planTitle, setPlanTitle] = useState(null);
+  const [planTick, setPlanTick] = useState(0);
+  const [myPredictions, setMyPredictions] = useState([]);
 
   // Captured ONCE per mount. Cards swiped in previous visits to this tab
   // are filtered out here so the deck resumes where it left off; cards
@@ -91,6 +105,36 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
     // the real dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id, user.id, partner?.id]);
+
+  useEffect(() => {
+    if (!partner?.id) return;
+    fetchMyPredictions(room.id).then(setMyPredictions).catch(() => {});
+  }, [room.id, partner?.id]);
+
+  // The plan, if there is one. Re-read on the realtime pulse too, so a
+  // plan your partner makes appears without you refreshing.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const plans = await fetchPlans(room.id);
+        const p = tonightPlan(plans);
+        if (cancelled) return;
+        setPlan(p);
+        if (p) {
+          const map = await fetchTitlesByKeys([`${p.tmdb_id}:${p.media_type}`]);
+          if (!cancelled) setPlanTitle(map.get(`${p.tmdb_id}:${p.media_type}`) || null);
+        } else {
+          setPlanTitle(null);
+        }
+      } catch {
+        /* a missing plan banner is not worth an error state */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [room.id, planTick]);
 
   // Partner digest, read once per mount. Uses the Swipe tab's own
   // last-seen marker so it means "since you last opened this".
@@ -186,6 +230,9 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
         <button className="gear" onClick={onOpenRecap} aria-label="Your year">
           Year
         </button>
+        <button className="gear" onClick={onOpenRate} aria-label="Rate what you've watched">
+          Rate
+        </button>
         <button className="gear" onClick={onOpenSettings} aria-label="Settings">
           Settings
         </button>
@@ -195,6 +242,14 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           the room code for re-sharing. It was specified and never built
           -- until now the first user got a normal-looking app with no
           hint that nothing would ever match. */}
+      <TonightBanner
+        plan={plan}
+        title={planTitle}
+        roomId={room.id}
+        userId={user.id}
+        onChanged={() => setPlanTick((n) => n + 1)}
+      />
+
       <IntentBar
         activeIntent={intentId}
         savedPresets={presets}
@@ -252,17 +307,42 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           debugByKey={deck?.debugByKey}
           devMode={devMode}
           roomPlatforms={room.platforms}
+          roomId={room.id}
+          userId={user.id}
+          partnerName={partner?.display_name}
+          // One card in six, and only where the partner genuinely has
+          // not voted and you have not already guessed. Sparse on
+          // purpose: a prompt on every card becomes noise, and noise
+          // gets dismissed without reading.
+          askGuess={(card) => {
+            if (!card || !partner?.id) return false;
+            const key = `${card.tmdb_id}:${card.media_type}`;
+            if (deck?.partnerVotedKeys?.has?.(key)) return false;
+            if (myPredictions.some((p) => `${p.tmdb_id}:${p.media_type}` === key)) return false;
+            return card.tmdb_id % 6 === 0;
+          }}
           resetKey={JSON.stringify(filters)}
           secretUnlocked={hasSecret()}
           onOpenSecret={onOpenSecret}
           onKnock={() => {
             const now = Date.now();
             // Reset if the taps got slow: this should require intent,
-            // not a stray double-tap two minutes apart.
-            const n = now - knock.at > 1800 ? 1 : knock.n + 1;
-            setKnock({ n, at: now });
+            // not a stray double-tap two minutes apart. Window widened
+            // from 1.8s to 2.5s -- seven taps is a lot to land on a
+            // small target, and the old window punished anyone slightly
+            // careful about hitting it.
+            const n = now - knock.current.at > 2500 ? 1 : knock.current.n + 1;
+            knock.current = { n, at: now };
+
+            // From the fourth tap on, a faint tick per tap. Nothing
+            // appears on screen, so the secret stays a secret to anyone
+            // watching, but the person tapping can feel that it is
+            // counting rather than tapping hopefully at a line of text.
+            if (n >= 4 && n < 7) hapticThreshold();
+
             if (n >= 7) {
-              setKnock({ n: 0, at: 0 });
+              knock.current = { n: 0, at: 0 };
+              hapticMatch();
               onKnockComplete?.();
             }
           }}
