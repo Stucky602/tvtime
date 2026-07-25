@@ -324,7 +324,15 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           resetKey={JSON.stringify(filters)}
           secretUnlocked={hasSecret()}
           onOpenSecret={onOpenSecret}
-          onKnock={() => {
+          onKnock={({ longPress } = {}) => {
+            // Either route gets you in.
+            if (longPress) {
+              knock.current = { n: 0, at: 0 };
+              hapticMatch();
+              onKnockComplete?.();
+              return;
+            }
+
             const now = Date.now();
             // Reset if the taps got slow: this should require intent,
             // not a stray double-tap two minutes apart. Window widened

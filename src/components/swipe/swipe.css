@@ -409,6 +409,12 @@
 
 .deck__progress {
   flex-shrink: 0;
+  /* It is a <button> now, so the button chrome has to be undone for it
+     to keep reading as a line of status text. */
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
   margin: 0;
   text-align: center;
   font-size: 11px;

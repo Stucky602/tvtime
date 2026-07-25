@@ -107,6 +107,8 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   const [guessed, setGuessed] = useState(null);
   const secretTaps = useRef([]);
   const stackRef = useRef(null);
+  const holdTimer = useRef(null);
+  const holdStart = useRef(0);
   const undoTimer = useRef(null);
   const crossedThreshold = useRef(false);
 
@@ -168,7 +170,13 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
     if (!current && cards.length > 0) onExhausted?.();
   }, [current, cards.length, onExhausted]);
 
-  useEffect(() => () => clearTimeout(undoTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(undoTimer.current);
+      clearTimeout(holdTimer.current);
+    },
+    []
+  );
 
   /** Card width drives the commit threshold (see lib/gesture.js). */
   const cardWidth = useCallback(() => stackRef.current?.offsetWidth || 360, []);
@@ -585,30 +593,64 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
       )}
 
       {/* Update 5: how much is left, so an empty deck is never a surprise. */}
-      <p
+      {/* A real <button>, not a <p> with a handler.
+          The logic here tested clean every time, in the real component
+          tree, which means the failure was environmental -- and rather
+          than keep guessing which iOS quirk it was (non-interactive
+          elements, double-tap-zoom heuristics, the synthetic click
+          delay, text selection), this removes the entire class. A
+          button is guaranteed tappable on every platform and gets
+          proper activation semantics for free. It is styled to look
+          exactly like the line of text it replaces. */}
+      <button
+        type="button"
         className="deck__progress"
-        // pointerdown, not click. On iOS, rapid tapping a non-interactive
-        // element triggers double-tap-to-zoom heuristics, which delays
-        // and sometimes swallows click events entirely -- so seven fast
-        // taps would register as three or four. pointerdown fires
-        // immediately and is not subject to that.
-        onPointerDown={onKnock}
+        onPointerDown={(e) => {
+          holdStart.current = Date.now();
+          clearTimeout(holdTimer.current);
+          // Long-press is a second way in, and the reliable one. Seven
+          // accurate taps on a small target is a lot to ask; one steady
+          // press is a single gesture that either happens or does not.
+          // Just as invisible, and it cannot fire by accident.
+          holdTimer.current = setTimeout(() => {
+            holdStart.current = 0;
+            onKnock?.({ longPress: true });
+          }, 1200);
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+        }}
+        onPointerUp={() => {
+          clearTimeout(holdTimer.current);
+          // A press that ended before the hold threshold counts as one
+          // tap toward the seven.
+          if (holdStart.current && Date.now() - holdStart.current < 1200) {
+            onKnock?.({ longPress: false });
+          }
+          holdStart.current = 0;
+        }}
+        onPointerCancel={() => {
+          clearTimeout(holdTimer.current);
+          holdStart.current = 0;
+        }}
       >
         {remaining} {remaining === 1 ? 'title' : 'titles'} left
         {undoable && <span className="deck__undohint"> · undo available</span>}
         {secretUnlocked && (
-          <button
+          <span
             className="deck__secret"
-            onClick={(e) => {
+            role="button"
+            tabIndex={0}
+            onPointerDown={(e) => {
               e.stopPropagation();
+              clearTimeout(holdTimer.current);
+              holdStart.current = 0;
               onOpenSecret?.();
             }}
             aria-label="Between us"
           >
             ·
-          </button>
+          </span>
         )}
-      </p>
+      </button>
 
       {queuedNotice && (
         <p className="notice" role="status">
