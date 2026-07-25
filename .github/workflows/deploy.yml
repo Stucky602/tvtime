@@ -43,12 +43,31 @@ permissions:
   pages: write
   id-token: write
 
-# Only one deployment should ever be in flight. If two pushes land close
-# together, let the newer one win rather than queuing -- there's no
-# reason to publish a stale build after a newer one already started.
+# Only one deployment in flight at a time, and IN-PROGRESS DEPLOYS ARE
+# NEVER CANCELLED.
+#
+# This used to be cancel-in-progress: true, on the reasoning that a
+# newer build should win. That reasoning is right for most jobs and
+# wrong for this one, and it is what left a deploy polling
+# "updating_pages" forever.
+#
+# The deploy-pages action does not just upload: it registers a
+# deployment with the Pages backend and then polls until Pages reports
+# it finished. Kill the job partway and the runner stops polling, but
+# the deployment it registered is still sitting on GitHub's side. The
+# next run then queues behind a deployment that nobody is driving any
+# more, and waits until it times out.
+#
+# GitHub's own Pages starter workflow uses false for exactly this
+# reason. Queuing costs a couple of minutes; cancelling costs a wedged
+# Pages state that has to be cleared by hand.
+#
+# The reason for wanting newest-wins has also gone: heartbeat commits no
+# longer trigger this workflow at all (see paths-ignore above), so
+# back-to-back deploys of identical code should not happen any more.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
