@@ -35,7 +35,7 @@ export async function getMyRoomState(userId) {
 
   const { data: users, error: usersErr } = await supabase
     .from('users')
-    .select('id,display_name,genre_prefs,tab_seen_at')
+    .select('id,display_name,genre_prefs,tab_seen_at,session_presets')
     .in(
       'id',
       members.map((m) => m.user_id)
@@ -93,6 +93,12 @@ export async function updatePlatforms(roomId, platforms) {
 /** §4.4's per-room reality toggle -- same grant as platforms. */
 export async function updateIncludeReality(roomId, includeReality) {
   const { error } = await supabase.from('rooms').update({ include_reality: includeReality }).eq('id', roomId);
+  if (error) throw error;
+}
+
+/** Saved session presets. Own-row update, same grant as genre_prefs. */
+export async function updateSessionPresets(userId, presets) {
+  const { error } = await supabase.from('users').update({ session_presets: presets }).eq('id', userId);
   if (error) throw error;
 }
 

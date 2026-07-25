@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import TitleListItem from './TitleListItem.jsx';
 import { fetchWatched } from '../../lib/tabs.js';
+import { fetchNotes } from '../../lib/notes.js';
+import { notesByTitle } from '../../lib/notes-pure.js';
+import { indexWatchRows, partitionByStatus } from '../../lib/lifecycle.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §2, §2.4, §6.5 (poll on focus)
 //
@@ -26,24 +29,29 @@ export default function TabScreen({
   // applying the event payload -- realtime is an accelerator here, not
   // a source of truth.
   pulse = 0,
+  userId,
   // When true this tab shows ONLY watched titles (the new Watched tab);
   // otherwise watched titles are hidden entirely, because they now have
   // a home of their own rather than a collapsed section at the bottom.
   watchedOnly = false,
 }) {
   const [rows, setRows] = useState(null);
-  const [watchedKeys, setWatchedKeys] = useState(new Map());
   const [error, setError] = useState(null);
+  const [watchRows, setWatchRows] = useState([]);
+  const [notes, setNotes] = useState([]);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('recent');
 
   const load = useCallback(async () => {
     try {
-      const [bucketRows, watchedRows] = await Promise.all([fetcher(), fetchWatched(roomId)]);
+      const [bucketRows, watchedRows, noteRows] = await Promise.all([
+        fetcher(),
+        fetchWatched(roomId),
+        fetchNotes(roomId).catch(() => []), // notes are optional decoration; never block the tab
+      ]);
+      setWatchRows(watchedRows);
+      setNotes(noteRows);
       setRows(bucketRows);
-      setWatchedKeys(
-        new Map(watchedRows.map((w) => [`${w.tmdb_id}:${w.media_type}`, w.verdict]))
-      );
       setError(null);
     } catch (err) {
       setError(err.message || 'Could not load this tab.');
@@ -64,14 +72,6 @@ export default function TabScreen({
     };
   }, [load, pulse]);
 
-  const handleWatchedChange = (key, nowWatched) => {
-    setWatchedKeys((prev) => {
-      const next = new Map(prev);
-      if (nowWatched) next.set(key, null);
-      else next.delete(key);
-      return next;
-    });
-  };
 
   if (error) {
     return (
@@ -86,14 +86,21 @@ export default function TabScreen({
     return <div className="tabscreen tabscreen--loading" aria-busy="true" />;
   }
 
-  const inScope = rows.filter((t) => {
-    const isWatched = watchedKeys.has(`${t.tmdb_id}:${t.media_type}`);
-    return watchedOnly ? isWatched : !isWatched;
-  });
+  // Lifecycle-aware. The Watched tab shows anything resolved (finished
+  // or given up). Every other tab shows the backlog plus whatever is
+  // in progress -- an in-progress series belongs in Together, since you
+  // have not finished deciding about it.
+  const watchIndex = indexWatchRows(watchRows);
+  const parts = partitionByStatus(rows, watchIndex);
+  const inScope = watchedOnly
+    ? [...parts.finished, ...parts.abandoned]
+    : [...parts.watching, ...parts.untouched];
 
   // Feature 6: at 100+ matches an append-only list is a wall. Search and
   // sort make it navigable; both are local to already-fetched rows, so
   // they're instant and cost no round trip.
+  const noteIndex = notesByTitle(notes);
+
   const active = inScope
     .filter((t) => (q.trim() ? t.title.toLowerCase().includes(q.trim().toLowerCase()) : true))
     .sort((a, b) => {
@@ -160,8 +167,11 @@ export default function TabScreen({
               title={t}
               roomId={roomId}
               roomPlatforms={roomPlatforms}
+              userId={userId}
+              watchRow={watchIndex.get(`${t.tmdb_id}:${t.media_type}`)}
+              notes={noteIndex.get(`${t.tmdb_id}:${t.media_type}`) || []}
+              onStatusChange={() => load()}
               watched={watchedOnly}
-              onWatchedChange={(v) => handleWatchedChange(`${t.tmdb_id}:${t.media_type}`, v)}
             />
           ))}
         </ul>

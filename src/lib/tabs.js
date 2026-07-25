@@ -13,7 +13,7 @@ const BUCKET_COLUMNS =
   'viewer_id,tmdb_id,media_type,viewer_direction,bucket,rights,lefts,total_votes,member_count';
 
 const TITLE_COLUMNS =
-  'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,providers,watch_link,trailer_key';
+  'tmdb_id,media_type,title,year,runtime,synopsis,poster_path,rating,vote_count,providers,watch_link,trailer_key,episode_count,season_count,genres';
 
 /**
  * Fetches one bucket's rows plus the title data to render them, joined
@@ -80,7 +80,7 @@ export function fetchPending() {
 export async function fetchWatched(roomId) {
   const { data: rows, error } = await supabase
     .from('watched')
-    .select('tmdb_id,media_type,verdict,marked_at')
+    .select('tmdb_id,media_type,verdict,marked_at,status,started_on,watched_on,progress_note')
     .eq('room_id', roomId)
     .order('marked_at', { ascending: false });
   if (error) throw error;
@@ -100,6 +100,36 @@ export async function fetchWatched(roomId) {
 }
 
 /** §2.4: mark watched, non-blocking verdict follows via the toast. */
+/**
+ * Lifecycle transition. Replaces the old boolean "mark watched".
+ *
+ * Status is written directly rather than through the RPC because the
+ * RPC predates the lifecycle and only knows about verdicts; the table
+ * policies already scope writes to room members, so a direct update is
+ * both correct and simpler than widening the function signature.
+ */
+export async function setWatchStatus({ roomId, tmdbId, mediaType, userId, status, verdict, progressNote }) {
+  const now = new Date();
+  const row = {
+    room_id: roomId,
+    tmdb_id: tmdbId,
+    media_type: mediaType,
+    marked_by: userId,
+    marked_at: now.toISOString(),
+    status,
+  };
+  if (status === 'watching') row.started_on = now.toISOString().slice(0, 10);
+  // watched_on is the date it FINISHED, so it is only meaningful here.
+  if (status === 'finished') row.watched_on = now.toISOString().slice(0, 10);
+  if (verdict !== undefined) row.verdict = verdict;
+  if (progressNote !== undefined) row.progress_note = progressNote;
+
+  const { error } = await supabase
+    .from('watched')
+    .upsert(row, { onConflict: 'room_id,tmdb_id,media_type' });
+  if (error) throw error;
+}
+
 export function markWatched(tmdb_id, media_type, verdict) {
   return rpc('mark_watched', { p_tmdb_id: tmdb_id, p_media_type: media_type, p_verdict: verdict ?? null });
 }

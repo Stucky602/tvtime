@@ -12,6 +12,11 @@ import {
 } from '../../lib/data.js';
 import { applyFilters } from '../../lib/deck.js';
 import { partnerActivity } from '../../lib/tabs.js';
+import IntentBar from './IntentBar.jsx';
+import { findIntent, filterByCommitment } from '../../lib/intent.js';
+import { commitmentHours } from '../../lib/lifecycle.js';
+import { hasSecret } from '../../lib/secret-gesture.js';
+import { updateSessionPresets } from '../../lib/room.js';
 import { CONFIG } from '../../lib/config.js';
 import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
@@ -20,7 +25,7 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, presentPartners = [], liveConnection = false }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, onOpenSecret, onKnockComplete, presentPartners = [], liveConnection = false }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -28,6 +33,13 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
   const [pendingSync, setPendingSync] = useState(0);
   const [loadError, setLoadError] = useState(null);
   const [activity, setActivity] = useState(null);
+  const [intentId, setIntentId] = useState(null);
+  // Hidden entry point. Seven deliberate taps on the titles-left counter
+  // within a few seconds. Chosen because the counter is always on screen,
+  // is not a button, and nobody taps a status line by accident -- so it
+  // is findable if you have been told and invisible if you have not.
+  const [knock, setKnock] = useState({ n: 0, at: 0 });
+  const [presets, setPresets] = useState(user?.session_presets || []);
 
   // Captured ONCE per mount. Cards swiped in previous visits to this tab
   // are filtered out here so the deck resumes where it left off; cards
@@ -112,13 +124,23 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
 
   const hasFilters = hasActiveFilters(filters);
 
+  const intent = findIntent(intentId, presets);
+
   const filteredCards = useMemo(() => {
     if (!deck) return [];
     const unswiped = deck.cards.filter(
       (c) => !swipedAtMount.current.has(`${c.tmdb_id}:${c.media_type}`)
     );
-    return hasFilters ? applyFilters(unswiped, filters) : unswiped;
-  }, [deck, filters, hasFilters]);
+    const base = hasFilters ? applyFilters(unswiped, filters) : unswiped;
+    // Commitment is the one dimension applyFilters cannot express: it
+    // needs episode count times runtime, which is derived rather than
+    // stored. Applied separately so the filter layer stays a pure
+    // predicate over title rows.
+    const cap = intent && typeof intent.derive === 'function'
+      ? intent.derive().maxCommitmentHours
+      : intent?.filters?.maxCommitmentHours;
+    return filterByCommitment(base, cap, commitmentHours);
+  }, [deck, filters, hasFilters, intent]);
 
   if (loading) {
     return <div className="tabscreen tabscreen--loading" aria-busy="true" />;
@@ -173,6 +195,27 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           the room code for re-sharing. It was specified and never built
           -- until now the first user got a normal-looking app with no
           hint that nothing would ever match. */}
+      <IntentBar
+        activeIntent={intentId}
+        savedPresets={presets}
+        currentFilters={filters}
+        onPick={(id, derived) => {
+          setIntentId(id);
+          // An intent IS a filter set, so it writes through to the same
+          // state rather than becoming a parallel narrowing mechanism.
+          setFilters(derived || EMPTY_FILTERS);
+        }}
+        onSavePreset={async (preset) => {
+          const next = [...presets, preset].slice(0, 8);
+          setPresets(next);
+          try {
+            await updateSessionPresets(user.id, next);
+          } catch {
+            /* a preset that fails to persist still works this session */
+          }
+        }}
+      />
+
       {partner && activity && activity.swipes >= 3 && (
         <div className="waiting waiting--activity">
           <p className="waiting__text">
@@ -210,6 +253,19 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           devMode={devMode}
           roomPlatforms={room.platforms}
           resetKey={JSON.stringify(filters)}
+          secretUnlocked={hasSecret()}
+          onOpenSecret={onOpenSecret}
+          onKnock={() => {
+            const now = Date.now();
+            // Reset if the taps got slow: this should require intent,
+            // not a stray double-tap two minutes apart.
+            const n = now - knock.at > 1800 ? 1 : knock.n + 1;
+            setKnock({ n, at: now });
+            if (n >= 7) {
+              setKnock({ n: 0, at: 0 });
+              onKnockComplete?.();
+            }
+          }}
           onCardResolved={(t) => addSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onCardUndone={(t) => removeSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onExhausted={() => {}}

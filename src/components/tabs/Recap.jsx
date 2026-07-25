@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase.js';
 import { GENRES, posterUrl } from '../../lib/config.js';
 import { buildHistory, recapStats, findDrift } from '../../lib/recap.js';
+import { onThisDay, tasteDrift } from '../../lib/lifecycle.js';
 
 // Watch history + recap, and the provider-drift prompt.
 //
@@ -24,7 +25,7 @@ export default function Recap({ room, onClose }) {
       try {
         const { data: watched, error: e1 } = await supabase
           .from('watched')
-          .select('tmdb_id,media_type,verdict,marked_at,watched_on')
+          .select('tmdb_id,media_type,verdict,marked_at,watched_on,status')
           .eq('room_id', room.id);
         if (e1) throw e1;
 
@@ -39,7 +40,12 @@ export default function Recap({ room, onClose }) {
           titles = data || [];
         }
         const byKey = new Map(titles.map((t) => [`${t.tmdb_id}:${t.media_type}`, t]));
-        setState({ history: buildHistory(watched || [], byKey), titles });
+        setState({
+          history: buildHistory(watched || [], byKey),
+          titles,
+          memories: onThisDay(watched || [], byKey),
+          drift: tasteDrift(watched || [], byKey),
+        });
       } catch (err) {
         setError(err.message || 'Could not load your history.');
       }
@@ -70,6 +76,19 @@ export default function Recap({ room, onClose }) {
         <h1 className="pick__title">Your year</h1>
         <button className="settings__close" onClick={onClose}>Close</button>
       </div>
+
+      {state.memories?.length > 0 && (
+        <section className="settings__group memories">
+          <h2>On this day</h2>
+          {state.memories.map((m) => (
+            <p key={`${m.tmdb_id}:${m.media_type}`} className="memory">
+              <strong>{m.yearsAgo} year{m.yearsAgo === 1 ? '' : 's'} ago tonight</strong> you
+              watched <strong>{m.title}</strong>
+              {m.watch?.verdict === 'up' ? ' and liked it.' : '.'}
+            </p>
+          ))}
+        </section>
+      )}
 
       {years.length > 1 && (
         <div className="filter-row filter-row--wrap">
@@ -171,6 +190,29 @@ export default function Recap({ room, onClose }) {
             </ul>
           </section>
         </>
+      )}
+
+      {state.drift?.length > 1 && (
+        <section className="settings__group">
+          <h2>How your taste moved</h2>
+          <p className="settings__hint">
+            Based on what you actually finished, not what you swiped on. Those
+            two diverge, and finishing is the more honest number.
+          </p>
+          <ul className="bar-list">
+            {state.drift.map((b, i) => (
+              <li key={i}>
+                <span className="bar-label">
+                  {b.from.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })}
+                </span>
+                <span className="bar bar--yes" style={{ width: `${Math.min(100, b.count * 12)}%` }} />
+                <span className="bar-count">
+                  {b.top.map((g) => GENRE_LABEL[g.id] || '?').slice(0, 2).join(', ')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {(drift.gone.length > 0 || drift.unknown.length > 0) && (

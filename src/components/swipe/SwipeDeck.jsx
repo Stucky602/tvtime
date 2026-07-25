@@ -4,6 +4,8 @@ import { CONFIG, prefetchPosters, adaptivePosterSize } from '../../lib/config.js
 import { submitSwipe, undoSwipe } from '../../lib/data.js';
 import { hapticThreshold, hapticCommit, hapticUndo, hapticMatch } from '../../lib/haptics.js';
 import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
+import SecretPanel from './SecretPanel.jsx';
+import { loadSecret, zoneFor, sequencesMatch, pruneTaps } from '../../lib/secret-gesture.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §6 (whole section), §5.3, §9
 //
@@ -65,7 +67,7 @@ import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } fro
 // the instantaneous flick is what the user actually did.
 const VELOCITY_WINDOW_MS = 80;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -94,6 +96,10 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   };
 
   const [showWhy, setShowWhy] = useState(false);
+  // Secret gesture. Taps accumulate only while they are recent, and are
+  // compared against a sequence that never leaves this device.
+  const [secretOpen, setSecretOpen] = useState(false);
+  const secretTaps = useRef([]);
   const stackRef = useRef(null);
   const undoTimer = useRef(null);
   const crossedThreshold = useRef(false);
@@ -312,6 +318,37 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
     gesture.current = { ...g, id: null, axis: null, phase: 'idle' };
     crossedThreshold.current = false;
 
+    // A tap that never became a drag is free real estate: the card's
+    // own gestures are drag-to-vote and drag-to-scroll, and its buttons
+    // handle their own taps and stop propagation. Nothing else was
+    // listening here, so the secret claims unused space rather than
+    // competing with anything.
+    if (!wasDragging && !cancelled && Math.abs(dx) < 8) {
+      const secret = loadSecret();
+      if (secret) {
+        const host = stackRef.current;
+        const box = host?.getBoundingClientRect();
+        const z = box
+          ? zoneFor(e.clientX - box.left, e.clientY - box.top, box.width, box.height)
+          : null;
+        if (z !== null) {
+          const now = performance.timeOrigin + performance.now();
+          const kept = pruneTaps(secretTaps.current, now);
+          kept.push({ zone: z, at: now });
+          secretTaps.current = kept;
+
+          // Compare against the tail, so a couple of stray taps before
+          // the real sequence do not spoil it.
+          const tail = kept.slice(-secret.sequence.length).map((t) => t.zone);
+          if (sequencesMatch(tail, secret.sequence)) {
+            secretTaps.current = [];
+            hapticMatch();
+            setSecretOpen(true);
+          }
+        }
+      }
+    }
+
     if (!wasDragging || cancelled) {
       // A tap, a vertical gesture, or -- critically -- a pointercancel.
       // Cancel means the BROWSER took the gesture over to scroll, not
@@ -393,6 +430,17 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
             onToggleExpand={() => setExpanded((v) => !v)}
           />
         </div>
+
+        {secretOpen && (
+          <SecretPanel
+            title={current}
+            onCancel={() => setSecretOpen(false)}
+            onPick={(direction) => {
+              setSecretOpen(false);
+              commit(direction);
+            }}
+          />
+        )}
 
         {match && (
           <div className="match" role="status">
@@ -487,9 +535,24 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
       )}
 
       {/* Update 5: how much is left, so an empty deck is never a surprise. */}
-      <p className="deck__progress">
+      <p
+        className="deck__progress"
+        onClick={onKnock}
+      >
         {remaining} {remaining === 1 ? 'title' : 'titles'} left
         {undoable && <span className="deck__undohint"> · undo available</span>}
+        {secretUnlocked && (
+          <button
+            className="deck__secret"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSecret?.();
+            }}
+            aria-label="Between us"
+          >
+            ·
+          </button>
+        )}
       </p>
 
       {queuedNotice && (

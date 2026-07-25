@@ -605,3 +605,85 @@
   border-radius: 6px;
   padding: 8px;
 }
+
+/* ---- Watch lifecycle ---- */
+
+.row__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.row__action--minor {
+  min-height: 34px;
+  min-width: 68px;
+  font-size: 9.5px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+
+/* Commitment badge. Colour-coded by total hours rather than episode
+   count, because 200 episodes of a 22-minute show is a smaller ask than
+   30 of a 70-minute one. */
+.row__commit {
+  margin: 3px 0 0;
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--line);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 3px;
+}
+
+.row__commit--short { background: var(--pop-cyan); }
+.row__commit--medium { background: var(--pop-yellow); }
+.row__commit--long { background: var(--pop-red); color: var(--text); }
+.row__commit--unknown { background: var(--panel-2); color: var(--text-dim); }
+
+.row__note {
+  margin: 5px 0 0;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--line);
+  background: var(--paper);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 5px;
+}
+
+/* Memory lane sits at the top of the recap: it is the thing worth
+   opening the screen for, so it gets the loud treatment. */
+.memories {
+  background: var(--pop-cyan);
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+  padding: 12px;
+}
+
+.memories h2 { color: var(--line); }
+
+.memory {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--line);
+}
+
+/* The secret screen borrows the panel's palette so it reads as the same
+   place, not as another tab. */
+.secret-screen .pick__title { color: #e8b4ff; }
+.secret-screen .settings__group h2 { color: #e8b4ff; }
+
+.secret-ours {
+  background: #1a1030;
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+  padding: 12px;
+}
+
+.secret-ours h2 { color: #ff8ec7; }

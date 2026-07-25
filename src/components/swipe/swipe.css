@@ -759,3 +759,189 @@
 .waiting--activity {
   background: var(--pop-yellow);
 }
+
+/* ---- Session intent ---- */
+
+.intent {
+  flex-shrink: 0;
+  padding: 8px 14px 0;
+}
+
+.intent__row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.intent__row::-webkit-scrollbar { display: none; }
+
+.intent__chip {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: var(--ink-w-sm) solid var(--line);
+  background: var(--panel-2);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.intent__chip--on {
+  color: var(--line);
+  background: var(--pop-yellow);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+/* The time-of-day suggestion is marked, never auto-applied. */
+.intent__chip--suggested {
+  border-color: var(--pop-cyan);
+  color: var(--pop-cyan);
+}
+
+.intent__hint { color: var(--pop-cyan); }
+
+.intent__suggest {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+.intent__save {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pop-cyan);
+  text-decoration: underline;
+}
+
+/* ---- The secret ---- */
+
+/* Deliberately unlike anything else in the app. When this appears you
+   should be certain you did something unusual. */
+.secret-panel {
+  position: absolute;
+  inset: auto 12px 12px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: #1a1030;
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hard);
+  animation: secret-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes secret-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+.secret-panel__title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  color: #e8b4ff;
+}
+
+.secret-panel__opt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 11px 13px;
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+  color: var(--line);
+  font-size: 14px;
+}
+
+.secret-panel__opt--ours { background: #ff8ec7; }
+.secret-panel__opt--mine { background: #9ee7c8; }
+
+.secret-panel__opt:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--line);
+}
+
+.secret-panel__blurb {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0.85;
+}
+
+.secret-panel__cancel {
+  align-self: center;
+  padding: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+/* The entry point. An unlabelled dot after the counter: legible only if
+   you already know it is there. */
+.deck__secret {
+  margin-left: 8px;
+  padding: 0 6px;
+  font-size: 16px;
+  line-height: 1;
+  color: #e8b4ff;
+}
+
+/* Setup. The grid is visible HERE and nowhere else: you need to see the
+   zones to choose a pattern, and you need to not see them afterwards or
+   the secret announces itself on every card. */
+.secret-setup {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+}
+
+.secret-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  aspect-ratio: 3 / 4;
+  max-height: 46vh;
+  margin: 4px auto;
+  width: 100%;
+  padding: 6px;
+  background: #1a1030;
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-hard);
+  touch-action: manipulation;
+}
+
+.secret-grid__cell {
+  border: var(--ink-w-sm) dashed rgba(232, 180, 255, 0.4);
+  border-radius: 8px;
+}
+
+.secret-setup__count {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e8b4ff;
+}

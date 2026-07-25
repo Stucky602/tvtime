@@ -9,13 +9,14 @@ import { fetchTogether, fetchSolo, fetchPending } from '../../lib/tabs.js';
 // transitions attach to, and it keeps the copy for each empty state
 // next to the tab it belongs to instead of in a lookup table.
 
-export function TogetherTab({ pulse, roomId, roomPlatforms, onTonightsPick }) {
+export function TogetherTab({ pulse, userId, roomId, roomPlatforms, onTonightsPick }) {
   return (
     <TabScreen
       title="Together"
       fetcher={fetchTogether}
       roomId={roomId}
       pulse={pulse}
+      userId={userId}
       roomPlatforms={roomPlatforms}
       onTonightsPick={onTonightsPick}
       emptyHead="Nothing yet"
@@ -24,13 +25,14 @@ export function TogetherTab({ pulse, roomId, roomPlatforms, onTonightsPick }) {
   );
 }
 
-export function SoloTab({ pulse, roomId, roomPlatforms }) {
+export function SoloTab({ pulse, userId, roomId, roomPlatforms }) {
   return (
     <TabScreen
       title="Solo"
       fetcher={fetchSolo}
       roomId={roomId}
       pulse={pulse}
+      userId={userId}
       roomPlatforms={roomPlatforms}
       emptyHead="Nothing here yet"
       emptyBody="Titles you're into that your partner passed on land here -- watch these without waiting."
@@ -38,13 +40,14 @@ export function SoloTab({ pulse, roomId, roomPlatforms }) {
   );
 }
 
-export function WatchedTab({ pulse, roomId, roomPlatforms }) {
+export function WatchedTab({ pulse, userId, roomId, roomPlatforms }) {
   return (
     <TabScreen
       title="Watched"
       fetcher={fetchTogether}
       roomId={roomId}
       pulse={pulse}
+      userId={userId}
       roomPlatforms={roomPlatforms}
       watchedOnly
       emptyHead="Nothing watched yet"
@@ -53,13 +56,14 @@ export function WatchedTab({ pulse, roomId, roomPlatforms }) {
   );
 }
 
-export function PendingTab({ pulse, roomId, roomPlatforms }) {
+export function PendingTab({ pulse, userId, roomId, roomPlatforms }) {
   return (
     <TabScreen
       title="Pending"
       fetcher={fetchPending}
       roomId={roomId}
       pulse={pulse}
+      userId={userId}
       roomPlatforms={roomPlatforms}
       emptyHead="All caught up"
       emptyBody="Titles you've said yes to, waiting on your partner's swipe, show up here."

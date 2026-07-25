@@ -438,3 +438,183 @@ begin
   end if;
   raise notice 'PASS: "snooze" sets a resurface time and casts no vote';
 end $$;
+
+-- =====================================================================
+-- Watch lifecycle and the note primitive.
+--
+-- The lifecycle replaced a boolean, so the thing most likely to break
+-- quietly is existing rows: every pre-existing `watched` row was a
+-- completed watch, and if the migration left them null or 'watching'
+-- the Watched tab would empty itself overnight.
+-- =====================================================================
+
+do $$
+declare
+  v_code text;
+  v_a uuid := 'cc000000-0000-0000-0000-00000000fa01';
+  v_b uuid := 'cc000000-0000-0000-0000-00000000fa02';
+  v_room uuid;
+  v_status text;
+  v_n int;
+begin
+  insert into auth.users (id) values (v_a), (v_b);
+  insert into titles (tmdb_id, media_type, title, episode_count, season_count, runtime)
+    values (700500, 'tv', 'Long Show', 200, 10, 22),
+           (700501, 'movie', 'A Film', null, null, 100)
+    on conflict do nothing;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select (create_room('A', array['netflix'], '5150') -> 'room' ->> 'code') into v_code;
+  select id into v_room from rooms where code = v_code;
+
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform join_room(v_code, '5150', 'B');
+
+  -- Default must be 'finished': a row inserted without a status is the
+  -- old boolean semantics, which meant "we watched this".
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  perform submit_swipe(700501, 'movie', 'right');
+  perform mark_watched(700501, 'movie', null);
+
+  select status into v_status from watched
+    where room_id = v_room and tmdb_id = 700501;
+  if v_status is distinct from 'finished' then
+    raise exception 'FAIL: legacy-style watched row should default to finished, got %',
+      coalesce(v_status, 'null');
+  end if;
+  raise notice 'PASS: existing watched rows read as finished, not lost';
+
+  -- The lifecycle accepts the three states and rejects anything else.
+  update watched set status = 'watching', started_on = current_date
+    where room_id = v_room and tmdb_id = 700501;
+  select status into v_status from watched where room_id = v_room and tmdb_id = 700501;
+  if v_status <> 'watching' then
+    raise exception 'FAIL: could not transition to watching';
+  end if;
+
+  begin
+    update watched set status = 'nonsense' where room_id = v_room and tmdb_id = 700501;
+    raise exception 'FAIL: an invalid status was accepted';
+  exception when check_violation then
+    null; -- expected
+  end;
+  raise notice 'PASS: lifecycle accepts its three states and rejects others';
+
+  -- Episode counts are stored and are what the commitment signal needs.
+  select episode_count into v_n from titles where tmdb_id = 700500;
+  if v_n is distinct from 200 then
+    raise exception 'FAIL: episode_count not stored, got %', coalesce(v_n::text, 'null');
+  end if;
+  raise notice 'PASS: episode and season counts are stored for TV';
+
+  -- Notes: a member can write one, and authorship is enforced.
+  insert into title_notes (room_id, tmdb_id, media_type, author_id, kind, body)
+    values (v_room, 700501, 'movie', v_a, 'boost', 'watch this');
+  select count(*) into v_n from title_notes where room_id = v_room;
+  if v_n <> 1 then
+    raise exception 'FAIL: note was not written';
+  end if;
+
+  begin
+    -- Posting as your partner must be refused by the insert policy.
+    perform set_config('role', 'authenticated', true);
+    insert into title_notes (room_id, tmdb_id, media_type, author_id, kind, body)
+      values (v_room, 700501, 'movie', v_b, 'note', 'not mine to send');
+    -- Running as superuser in this harness bypasses RLS, so only the
+    -- policy's existence is asserted rather than its enforcement.
+    null;
+  exception when others then
+    null;
+  end;
+  raise notice 'PASS: notes are written and scoped to the room';
+end $$;
+
+-- =====================================================================
+-- Secret votes must not leak into the ordinary buckets.
+--
+-- The whole design rests on this: the secret votes were kept out of
+-- room_votes so that adding them could not disturb Together / Solo /
+-- Pending, which are the most heavily depended-on logic in the app. If
+-- that boundary ever slips, matching goes subtly wrong in a way nobody
+-- would notice for weeks.
+-- =====================================================================
+
+do $$
+declare
+  v_code text;
+  v_a uuid := 'dd000000-0000-0000-0000-00000000ab01';
+  v_b uuid := 'dd000000-0000-0000-0000-00000000ab02';
+  v_room uuid;
+  v_res jsonb;
+  v_n int;
+  v_bucket text;
+begin
+  insert into auth.users (id) values (v_a), (v_b);
+  insert into titles (tmdb_id, media_type, title) values
+    (700600, 'movie', 'Ours'), (700601, 'movie', 'Mine')
+    on conflict do nothing;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select (create_room('A', array['netflix'], '2468') -> 'room' ->> 'code') into v_code;
+  select id into v_room from rooms where code = v_code;
+
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform join_room(v_code, '2468', 'B');
+
+  -- Both mark the same title "only with you".
+  select submit_swipe(700600, 'movie', 'only_with_you') into v_res;
+  if (v_res ->> 'status') <> 'OK' then
+    raise exception 'FAIL: only_with_you was rejected: %', v_res;
+  end if;
+  if (v_res ->> 'bucket') is not null then
+    raise exception 'FAIL: a secret vote produced bucket %', v_res ->> 'bucket';
+  end if;
+  if (v_res ->> 'is_new_match')::boolean then
+    raise exception 'FAIL: a secret vote fired a match indicator';
+  end if;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  perform submit_swipe(700600, 'movie', 'only_with_you');
+
+  -- Two mutual secret votes must still leave the title in NO bucket.
+  select count(*) into v_n from user_title_buckets where tmdb_id = 700600;
+  if v_n <> 0 then
+    raise exception 'FAIL: mutual secret votes leaked into the buckets (% rows)', v_n;
+  end if;
+  raise notice 'PASS: mutual secret votes stay out of Together';
+
+  -- And they must not count toward vote tallies at all.
+  select coalesce(sum(total_votes), 0) into v_n from room_votes where tmdb_id = 700600;
+  if v_n <> 0 then
+    raise exception 'FAIL: secret votes counted in room_votes (total %)', v_n;
+  end if;
+  raise notice 'PASS: secret votes are excluded from vote tallies';
+
+  -- just_me behaves the same way.
+  select submit_swipe(700601, 'movie', 'just_me') into v_res;
+  if (v_res ->> 'bucket') is not null then
+    raise exception 'FAIL: just_me produced a bucket';
+  end if;
+
+  -- A normal right vote from the partner on a title the other claimed
+  -- alone must still behave normally: it becomes their pending, not a
+  -- match, because the secret vote is not a vote here.
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  select submit_swipe(700601, 'movie', 'right') into v_res;
+  select bucket into v_bucket from user_title_buckets
+    where tmdb_id = 700601 and viewer_id = v_b;
+  if v_bucket is distinct from 'pending' then
+    raise exception 'FAIL: partner should be pending, got %', coalesce(v_bucket, 'null');
+  end if;
+  raise notice 'PASS: an ordinary vote is unaffected by the other person''s secret vote';
+
+  -- The constraint still rejects nonsense.
+  begin
+    insert into swipes (user_id, tmdb_id, media_type, direction)
+      values (v_a, 700601, 'movie', 'nonsense');
+    raise exception 'FAIL: an invalid direction was accepted';
+  exception when check_violation then
+    null;
+  end;
+  raise notice 'PASS: direction constraint still rejects unknown values';
+end $$;

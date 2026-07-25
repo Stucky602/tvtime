@@ -556,6 +556,12 @@ function titleRowFromDetail(mediaType, detail, genreMap) {
     is_anime: detectAnime(mediaType, detail, genreIds),
     trailer_key: extractTrailerKey(detail),
     watch_link: extractWatchLink(detail),
+    // Commitment signal. Movies have neither, hence the nulls: an
+    // 8-episode series and a 200-episode one are completely different
+    // propositions and the card previously showed the same thing for
+    // both.
+    episode_count: mediaType === 'tv' ? (detail.number_of_episodes ?? null) : null,
+    season_count: mediaType === 'tv' ? (detail.number_of_seasons ?? null) : null,
     keyword_ids: extractKeywordIds(detail),
     cast_ids: castInfo.ids,
     cast_names: castInfo.names,
