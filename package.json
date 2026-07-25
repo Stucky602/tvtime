@@ -1,18 +1,25 @@
 {
-  "name": "ltb-order-tracker",
-  "version": "10.0.0",
+  "name": "flixpix",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "build": "npm test && esbuild entry.jsx --bundle --loader:.jsx=jsx --outfile=app.js --define:process.env.NODE_ENV=\\\"production\\\" --format=iife --platform=browser",
-    "test": "node tests/invariants.mjs && node tests/property.mjs && node tests/worker_sim.mjs && node tests/receipt_scan.mjs && node tests/shopping_merge.mjs && node tests/audit_log.mjs && node tests/seed_reconcile.mjs && node tests/migrations.mjs && node tests/journal.mjs && node tests/archive.mjs && node tests/listControls.mjs && node tests/timeBanners.mjs && node tests/wakeLock.mjs && node tests/preserveScroll.mjs && node tests/containers.mjs && node tests/dossierPrompts.mjs && node tests/weekLedger.mjs && node tests/cookList.mjs && node tests/companion_features.mjs && node tests/weekNotice.mjs && node tests/kitchen_weight.mjs && node tests/edge_cases.mjs && node tests/conv_unit_contract.mjs && node tests/diet_flags.mjs && node tests/allergens.mjs && node tests/library_sync.mjs && node tests/customer_pages.mjs && node tests/component_render.mjs && node tests/count_entry.mjs && node tests/learned_data.mjs && node tools/syncMainMenu.mjs && node tools/syncPipeline.mjs && node tools/checkRepoStructure.mjs"
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@supabase/supabase-js": "^2.110.8",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "esbuild": "^0.23.0",
-    "jsdom": "^29.1.1"
-  },
-  "type": "module"
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "oxlint": "^1.71.0",
+    "vite": "^8.1.1",
+    "vite-plugin-pwa": "^1.3.0"
+  }
 }
