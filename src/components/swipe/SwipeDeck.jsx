@@ -68,6 +68,10 @@ import { loadSecret, zoneFor, sequencesMatch, pruneTaps } from '../../lib/secret
 // the instantaneous flick is what the user actually did.
 const VELOCITY_WINDOW_MS = 80;
 
+// How long to hold the counter to open the secret. Long enough that it
+// cannot happen by accident, short enough to be worth doing.
+const HOLD_SECONDS = 5;
+
 export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret, askGuess, roomId, userId, partnerName }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
@@ -106,9 +110,14 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   // like about swiping.
   const [guessed, setGuessed] = useState(null);
   const secretTaps = useRef([]);
+  const draggedThisGesture = useRef(false);
   const stackRef = useRef(null);
   const holdTimer = useRef(null);
-  const holdStart = useRef(0);
+  const holdTicker = useRef(null);
+  const clearHold = () => {
+    clearTimeout(holdTimer.current);
+    clearInterval(holdTicker.current);
+  };
   const undoTimer = useRef(null);
   const crossedThreshold = useRef(false);
 
@@ -174,6 +183,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
     () => () => {
       clearTimeout(undoTimer.current);
       clearTimeout(holdTimer.current);
+      clearInterval(holdTicker.current);
     },
     []
   );
@@ -322,6 +332,52 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
     setDrag({ dx: rawDx, dy, active: true });
   };
 
+  /**
+   * Secret tap capture, on CLICK rather than pointerup.
+   *
+   * The pointerup version worked in testing and failed on a real phone,
+   * and the difference was the poster. A card with artwork is tall
+   * enough to scroll, and on iOS touching a scrollable element fires
+   * POINTERCANCEL rather than pointerup while the browser decides
+   * whether you are scrolling. The old code deliberately skipped
+   * capture on cancel -- correctly, since a browser-cancelled DRAG must
+   * never cast a vote -- and in doing so it threw away every tap on a
+   * scrollable card. My test cards had no poster, so they did not
+   * scroll, so they never cancelled, so the bug could not appear.
+   *
+   * `click` has exactly the semantics wanted here: it fires on a tap,
+   * and browsers suppress it after a drag or a scroll. So the event
+   * itself does the filtering that the pointer handlers were doing by
+   * hand and getting wrong.
+   */
+  const onSecretTap = (e) => {
+    if (draggedThisGesture.current) {
+      draggedThisGesture.current = false;
+      return; // a swipe, not a tap
+    }
+    const secret = loadSecret();
+    if (!secret) return;
+
+    const box = stackRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const z = zoneFor(e.clientX - box.left, e.clientY - box.top, box.width, box.height);
+    if (z === null) return;
+
+    const now = Date.now();
+    const kept = pruneTaps(secretTaps.current, now);
+    kept.push({ zone: z, at: now });
+    secretTaps.current = kept;
+
+    // Compare against the tail, so a stray tap before the real sequence
+    // does not spoil it.
+    const tail = kept.slice(-secret.sequence.length).map((t) => t.zone);
+    if (sequencesMatch(tail, secret.sequence)) {
+      secretTaps.current = [];
+      hapticMatch();
+      setSecretOpen(true);
+    }
+  };
+
   const onPointerUp = (e, cancelled = false) => {
     const g = gesture.current;
     if (g.id !== e.pointerId) return;
@@ -336,36 +392,9 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
     gesture.current = { ...g, id: null, axis: null, phase: 'idle' };
     crossedThreshold.current = false;
 
-    // A tap that never became a drag is free real estate: the card's
-    // own gestures are drag-to-vote and drag-to-scroll, and its buttons
-    // handle their own taps and stop propagation. Nothing else was
-    // listening here, so the secret claims unused space rather than
-    // competing with anything.
-    if (!wasDragging && !cancelled && Math.abs(dx) < 8) {
-      const secret = loadSecret();
-      if (secret) {
-        const host = stackRef.current;
-        const box = host?.getBoundingClientRect();
-        const z = box
-          ? zoneFor(e.clientX - box.left, e.clientY - box.top, box.width, box.height)
-          : null;
-        if (z !== null) {
-          const now = performance.timeOrigin + performance.now();
-          const kept = pruneTaps(secretTaps.current, now);
-          kept.push({ zone: z, at: now });
-          secretTaps.current = kept;
-
-          // Compare against the tail, so a couple of stray taps before
-          // the real sequence do not spoil it.
-          const tail = kept.slice(-secret.sequence.length).map((t) => t.zone);
-          if (sequencesMatch(tail, secret.sequence)) {
-            secretTaps.current = [];
-            hapticMatch();
-            setSecretOpen(true);
-          }
-        }
-      }
-    }
+    // Secret tap capture used to live here and did not work on a real
+    // card. See onSecretTap below for why.
+    if (wasDragging) draggedThisGesture.current = true;
 
     if (!wasDragging || cancelled) {
       // A tap, a vertical gesture, or -- critically -- a pointercancel.
@@ -438,6 +467,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={(e) => onPointerUp(e, true)}
+          onClick={onSecretTap}
         >
           <SwipeCard
             title={current}
@@ -606,31 +636,33 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
         type="button"
         className="deck__progress"
         onPointerDown={(e) => {
-          holdStart.current = Date.now();
-          clearTimeout(holdTimer.current);
-          // Long-press is a second way in, and the reliable one. Seven
-          // accurate taps on a small target is a lot to ask; one steady
-          // press is a single gesture that either happens or does not.
-          // Just as invisible, and it cannot fire by accident.
+          clearHold();
+          // Hold to open. The tap-counting route is gone: seven accurate
+          // taps on a small target was too much to ask of a phone, and
+          // it failed in the one place it needed to work.
+          //
+          // Five seconds is a long time to hold something with no
+          // feedback, so there is a tick every second. Nothing appears
+          // on screen -- it stays secret to anyone watching -- but the
+          // person holding can feel it counting, which is the
+          // difference between "this is working" and "this is broken".
+          let ticks = 0;
+          holdTicker.current = setInterval(() => {
+            ticks += 1;
+            if (ticks < HOLD_SECONDS) hapticThreshold();
+          }, 1000);
+
           holdTimer.current = setTimeout(() => {
-            holdStart.current = 0;
-            onKnock?.({ longPress: true });
-          }, 1200);
+            clearHold();
+            hapticMatch();
+            onKnock?.();
+          }, HOLD_SECONDS * 1000);
+
           e.currentTarget.setPointerCapture?.(e.pointerId);
         }}
-        onPointerUp={() => {
-          clearTimeout(holdTimer.current);
-          // A press that ended before the hold threshold counts as one
-          // tap toward the seven.
-          if (holdStart.current && Date.now() - holdStart.current < 1200) {
-            onKnock?.({ longPress: false });
-          }
-          holdStart.current = 0;
-        }}
-        onPointerCancel={() => {
-          clearTimeout(holdTimer.current);
-          holdStart.current = 0;
-        }}
+        onPointerUp={clearHold}
+        onPointerLeave={clearHold}
+        onPointerCancel={clearHold}
       >
         {remaining} {remaining === 1 ? 'title' : 'titles'} left
         {undoable && <span className="deck__undohint"> · undo available</span>}

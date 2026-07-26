@@ -2,7 +2,7 @@
 // mounted and exercised without a backend.
 const TITLES = Array.from({ length: 12 }, (_, i) => ({
   tmdb_id: 100 + i, media_type: 'movie', title: `Stub Title ${i + 1}`,
-  year: 2020, runtime: 100, synopsis: 'x', poster_path: null, backdrop_path: null,
+  year: 2020, runtime: 100, synopsis: 'A long synopsis, repeated to make the card genuinely taller than its viewport so the scroll container is live. '.repeat(6), poster_path: '/poster.jpg', backdrop_path: '/poster.jpg',
   rating: 7, vote_count: 500, popularity: 50, genres: [3], providers: ['netflix'],
   is_reality: false, original_language: 'en', keyword_ids: [], cast_ids: [],
   cast_names: [], director_ids: [], director_names: [],
