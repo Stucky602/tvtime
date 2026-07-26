@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { GENRES, CONFIG, PLATFORMS } from '../../lib/config.js';
 import { applyFilters } from '../../lib/deck.js';
 import { EMPTY_FILTERS, hasActiveFilters } from '../../lib/filters.js';
+import { INTENTS, suggestedIntent, intentFilters, makePreset } from '../../lib/intent.js';
 
 // §5.3: filters MASK the built deck client-side rather than triggering a
 // new TMDB query. The masking logic lives in deck.js next to buildDeck,
@@ -24,7 +25,10 @@ const RATINGS = [
 ];
 
 
-export default function FilterPanel({ open, filters, onChange, onClose, allCards, roomPlatforms }) {
+export default function FilterPanel({
+  open, filters, onChange, onClose, allCards, roomPlatforms,
+  activeIntent, onPickIntent, savedPresets = [], onSavePreset,
+}) {
   const [draft, setDraft] = useState(filters);
 
   // Recomputed from the LIVE draft, not the applied filters, so the
@@ -74,6 +78,43 @@ export default function FilterPanel({ open, filters, onChange, onClose, allCards
         <h2>Filters</h2>
         <button onClick={onClose} aria-label="Close filters">Done</button>
       </div>
+
+      {/* Intent first: it is the coarsest choice and it sets everything
+          below, so asking it last would be backwards. Lives here rather
+          than as a permanent row on the deck, because it is a filter and
+          a second always-visible filter mechanism was the clutter. */}
+      <section className="filter-group">
+        <h3>What kind of night</h3>
+        <div className="filter-row filter-row--wrap">
+          <button
+            className={`filter-chip ${!activeIntent ? 'filter-chip--on' : ''}`}
+            onClick={() => onPickIntent?.(null, EMPTY_FILTERS)}
+          >
+            Anything
+          </button>
+          {[...INTENTS, ...savedPresets].map((i) => (
+            <button
+              key={i.id}
+              className={`filter-chip ${activeIntent === i.id ? 'filter-chip--on' : ''} ${
+                !activeIntent && suggestedIntent() === i.id ? 'filter-chip--suggested' : ''
+              }`}
+              onClick={() => {
+                const f = intentFilters(i);
+                setDraft(f);
+                onPickIntent?.(i.id, f);
+              }}
+            >
+              {i.label}
+            </button>
+          ))}
+        </div>
+        {!activeIntent && suggestedIntent() && (
+          <p className="filter-hint">
+            Going by the time, {INTENTS.find((i) => i.id === suggestedIntent())?.label.toLowerCase()}{' '}
+            probably fits.
+          </p>
+        )}
+      </section>
 
       <section className="filter-group">
         <h3>Type</h3>
@@ -201,6 +242,18 @@ export default function FilterPanel({ open, filters, onChange, onClose, allCards
       )}
       {!tooFew && hasActiveFilters(draft) && (
         <p className="filter-count">{remainingCount} titles match</p>
+      )}
+
+      {onSavePreset && (
+        <button
+          className="filter-save"
+          onClick={() => {
+            const label = window.prompt('Name this preset');
+            if (label) onSavePreset(makePreset(label, draft));
+          }}
+        >
+          Save these as a preset
+        </button>
       )}
 
       <div className="filter-sheet__actions">

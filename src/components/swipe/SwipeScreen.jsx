@@ -12,11 +12,11 @@ import {
 } from '../../lib/data.js';
 import { applyFilters } from '../../lib/deck.js';
 import { partnerActivity } from '../../lib/tabs.js';
-import IntentBar from './IntentBar.jsx';
+import MoreMenu from './MoreMenu.jsx';
 import { findIntent, filterByCommitment } from '../../lib/intent.js';
 import { commitmentHours } from '../../lib/lifecycle.js';
 import { hasSecret } from '../../lib/secret-gesture.js';
-import { hapticThreshold, hapticMatch } from '../../lib/haptics.js';
+
 import TonightBanner from './TonightBanner.jsx';
 import { fetchPlans } from '../../lib/plans.js';
 import { tonightPlan } from '../../lib/plans-pure.js';
@@ -40,15 +40,7 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
   const [loadError, setLoadError] = useState(null);
   const [activity, setActivity] = useState(null);
   const [intentId, setIntentId] = useState(null);
-  // Hidden entry point. Seven deliberate taps on the titles-left counter.
-  //
-  // A REF, not state. State was the original bug: each tap read `knock`
-  // from a closure captured at render time, and seven taps in under two
-  // seconds fire faster than React re-renders, so several taps in a row
-  // all read the same stale count and the total never climbed past two
-  // or three. A ref is written and read synchronously, which is what a
-  // counter like this actually needs.
-  const knock = useRef({ n: 0, at: 0 });
+  const [moreOpen, setMoreOpen] = useState(false);
   const [presets, setPresets] = useState(user?.session_presets || []);
   const [plan, setPlan] = useState(null);
   const [planTitle, setPlanTitle] = useState(null);
@@ -207,34 +199,24 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
   return (
     <div className="swipescreen">
       <div className="swipescreen__bar">
+        {/* Two controls, not six. Filters changes what you are looking at
+            right now so it stays on the deck; everything else is a place
+            you visit occasionally and lives behind More. The old bar
+            overflowed on a 393px phone, which meant Settings was simply
+            unreachable with nothing to say so. */}
         <button className="filter-toggle" onClick={() => setFilterOpen(true)}>
-          Filters{hasFilters && ' •'}
+          Filters{hasFilters || intentId ? ' •' : ''}
         </button>
+
         {liveConnection && presentPartners.length > 0 && (
           <span className="presence" role="status">
             <span className="presence__dot" aria-hidden="true" />
-            {presentPartners[0].display_name || 'Your partner'} is here
+            {presentPartners[0].display_name || 'Partner'}
           </span>
         )}
-        {pendingSync > 0 && (
-          <span className="sync-note">
-            {pendingSync} swipe{pendingSync === 1 ? '' : 's'} syncing…
-          </span>
-        )}
-        <button className="gear" onClick={onOpenSearch} aria-label="Search titles">
-          Search
-        </button>
-        <button className="gear" onClick={onOpenStats} aria-label="Stats">
-          Stats
-        </button>
-        <button className="gear" onClick={onOpenRecap} aria-label="Your year">
-          Year
-        </button>
-        <button className="gear" onClick={onOpenRate} aria-label="Rate what you've watched">
-          Rate
-        </button>
-        <button className="gear" onClick={onOpenSettings} aria-label="Settings">
-          Settings
+
+        <button className="gear" onClick={() => setMoreOpen(true)} aria-label="More">
+          More
         </button>
       </div>
 
@@ -248,27 +230,6 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
         roomId={room.id}
         userId={user.id}
         onChanged={() => setPlanTick((n) => n + 1)}
-      />
-
-      <IntentBar
-        activeIntent={intentId}
-        savedPresets={presets}
-        currentFilters={filters}
-        onPick={(id, derived) => {
-          setIntentId(id);
-          // An intent IS a filter set, so it writes through to the same
-          // state rather than becoming a parallel narrowing mechanism.
-          setFilters(derived || EMPTY_FILTERS);
-        }}
-        onSavePreset={async (preset) => {
-          const next = [...presets, preset].slice(0, 8);
-          setPresets(next);
-          try {
-            await updateSessionPresets(user.id, next);
-          } catch {
-            /* a preset that fails to persist still works this session */
-          }
-        }}
       />
 
       {partner && activity && activity.swipes >= 3 && (
@@ -321,44 +282,28 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
             if (myPredictions.some((p) => `${p.tmdb_id}:${p.media_type}` === key)) return false;
             return card.tmdb_id % 6 === 0;
           }}
+          pendingSync={pendingSync}
           resetKey={JSON.stringify(filters)}
           secretUnlocked={hasSecret()}
           onOpenSecret={onOpenSecret}
-          onKnock={({ longPress } = {}) => {
-            // Either route gets you in.
-            if (longPress) {
-              knock.current = { n: 0, at: 0 };
-              hapticMatch();
-              onKnockComplete?.();
-              return;
-            }
-
-            const now = Date.now();
-            // Reset if the taps got slow: this should require intent,
-            // not a stray double-tap two minutes apart. Window widened
-            // from 1.8s to 2.5s -- seven taps is a lot to land on a
-            // small target, and the old window punished anyone slightly
-            // careful about hitting it.
-            const n = now - knock.current.at > 2500 ? 1 : knock.current.n + 1;
-            knock.current = { n, at: now };
-
-            // From the fourth tap on, a faint tick per tap. Nothing
-            // appears on screen, so the secret stays a secret to anyone
-            // watching, but the person tapping can feel that it is
-            // counting rather than tapping hopefully at a line of text.
-            if (n >= 4 && n < 7) hapticThreshold();
-
-            if (n >= 7) {
-              knock.current = { n: 0, at: 0 };
-              hapticMatch();
-              onKnockComplete?.();
-            }
-          }}
+          onKnock={() => onKnockComplete?.()}
           onCardResolved={(t) => addSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onCardUndone={(t) => removeSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}
           onExhausted={() => {}}
         />
       )}
+
+      <MoreMenu
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        onPick={(id) => {
+          if (id === 'search') onOpenSearch?.();
+          else if (id === 'stats') onOpenStats?.();
+          else if (id === 'recap') onOpenRecap?.();
+          else if (id === 'rate') onOpenRate?.();
+          else if (id === 'settings') onOpenSettings?.();
+        }}
+      />
 
       <FilterPanel
         open={filterOpen}
@@ -367,6 +312,21 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
         onClose={() => setFilterOpen(false)}
         allCards={filteredCards}
         roomPlatforms={room.platforms}
+        activeIntent={intentId}
+        savedPresets={presets}
+        onPickIntent={(id, derived) => {
+          setIntentId(id);
+          setFilters(derived || EMPTY_FILTERS);
+        }}
+        onSavePreset={async (preset) => {
+          const next = [...presets, preset].slice(0, 8);
+          setPresets(next);
+          try {
+            await updateSessionPresets(user.id, next);
+          } catch {
+            /* a preset that fails to persist still works this session */
+          }
+        }}
       />
     </div>
   );

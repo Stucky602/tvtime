@@ -72,7 +72,7 @@ const VELOCITY_WINDOW_MS = 80;
 // cannot happen by accident, short enough to be worth doing.
 const HOLD_SECONDS = 5;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret, askGuess, roomId, userId, partnerName }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret, askGuess, roomId, userId, partnerName, pendingSync = 0 }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -574,7 +574,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
 
       {/* Distinct from a pass: neither of these is a taste signal, and
           treating them as one was corrupting the recommender. */}
-      <div className="controls controls--secondary">
+      <div className="controls controls--minorrow">
         <button
           className="ctl ctl--minor"
           onClick={() => commit('seen')}
@@ -666,6 +666,9 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
       >
         {remaining} {remaining === 1 ? 'title' : 'titles'} left
         {undoable && <span className="deck__undohint"> · undo available</span>}
+        {pendingSync > 0 && (
+          <span className="deck__undohint"> · {pendingSync} syncing</span>
+        )}
         {secretUnlocked && (
           <span
             className="deck__secret"

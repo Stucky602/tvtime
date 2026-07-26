@@ -22,8 +22,12 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 10px 14px 16px;
-  gap: 12px;
+  /* Tighter padding and gaps. Each was small on its own; together with
+     six gaps down the screen they were costing about 60px, which is the
+     difference between a poster that fits and one letterboxed into the
+     middle third. */
+  padding: 8px 14px 10px;
+  gap: 8px;
 }
 
 .deck__stack {
@@ -422,10 +426,10 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-faint);
-  /* An 11px line of text is a ~14px tap target, which is far too small
-     to hit seven times in a row on a phone. Padding gives it a real
-     44px target while the text itself stays the same size. */
-  padding: 14px 0;
+  /* Still a real tap target for the five-second hold, but 10px rather
+     than 14px each side: the hold does not need the same generosity
+     seven consecutive taps did. */
+  padding: 10px 0;
   /* Stops iOS treating fast repeat taps as double-tap-to-zoom, which
      was delaying and dropping the events. */
   touch-action: manipulation;
@@ -441,9 +445,11 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 10px 14px 0;
-  padding: 10px 12px;
+  gap: 8px;
+  margin: 8px 14px 0;
+  /* Was 10px/12px with 12.5px text over two lines, which came to about
+     120px of screen for one sentence. Now one line. */
+  padding: 6px 10px;
   background: var(--pop-cyan);
   border: var(--ink-w) solid var(--line);
   border-radius: var(--radius-control);
@@ -453,10 +459,15 @@
 .waiting__text {
   margin: 0;
   flex: 1;
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
   color: var(--line);
+  /* One line, truncated. The full number is not worth a second line of
+     a screen this crowded. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .waiting__code {
@@ -661,19 +672,31 @@
 
 /* ---- Secondary outcomes: Seen it / Later / Why this ---- */
 
-.controls--secondary {
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+/* Seen it / Later / Why this are important -- they are what stops the
+   recommender learning the wrong thing -- but they are not primary
+   actions, and a second full-height row of buttons said they were.
+   Small text row instead: same reach, a third of the space. */
+.controls--minorrow {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .ctl--minor {
-  min-height: 40px;
-  font-size: 11px;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
   letter-spacing: 0.06em;
-  background: var(--panel-2);
-  color: var(--text-dim);
-  box-shadow: var(--shadow-hard-sm);
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-edge, rgba(255,255,255,0.2));
 }
+
+.ctl--minor:active { transform: none; color: var(--text); }
 
 /* ---- Coach mark (discoverability for the new outcomes) ---- */
 
@@ -1101,4 +1124,99 @@
 .card__play {
   position: relative;
   z-index: 1;
+}
+
+/* ---- More sheet ---- */
+
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: rgba(16, 17, 26, 0.72);
+}
+
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 10;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border-top: var(--ink-w) solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+}
+
+.sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: var(--tap);
+  padding: 11px 13px;
+  text-align: left;
+  background: var(--panel-2);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.sheet-item:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--line);
+}
+
+.sheet-item__label {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.sheet-item__blurb {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* Intent chips inside the filter sheet */
+.filter-chip--suggested {
+  border-color: var(--pop-cyan);
+  color: var(--pop-cyan);
+}
+
+.filter-hint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+.filter-save {
+  display: block;
+  width: 100%;
+  margin: 4px 0 14px;
+  padding: 8px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pop-cyan);
+  text-align: left;
+  text-decoration: underline;
+}
+
+/* Presence moved from the old top bar into the two-control bar, so it
+   needs to survive being squeezed between them. */
+.swipescreen__bar .presence {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
