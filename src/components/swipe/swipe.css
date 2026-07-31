@@ -108,6 +108,14 @@
      pre-cropped, cut off mid-title, which is what looked broken. */
   height: 100%;
   min-height: 100%;
+  /* Clips the backdrop.
+     .card__backdrop is deliberately oversized (inset: -20px) so its 26px
+     blur does not show soft feathered edges inside the artwork. Without
+     clipping here, that overhang also spilled 20px DOWN into the meta
+     panel and laid a dimmed, blurred image over the first line of the
+     synopsis -- which is why row one read faded and every row after it
+     looked normal. The bleed is wanted inside the art and nowhere else. */
+  overflow: hidden;
   background: var(--ink);
   background-image: radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.05) 1.5px, transparent 0);
   background-size: 10px 10px;
@@ -218,6 +226,14 @@
 }
 
 .card__meta {
+  /* Own stacking context, above everything in the art layer.
+     The art contains a blurred backdrop and a gradient scrim, both of
+     which paint near this boundary. Nothing should be able to reach the
+     first line of the synopsis and leave it looking dimmer than the
+     lines under it. This makes that structural rather than a matter of
+     which rule happens to win. */
+  position: relative;
+  z-index: 3;
   padding: 16px 14px 20px;
   border-top: var(--ink-w) solid var(--line);
   background: var(--panel);
@@ -234,7 +250,11 @@
   margin: 0;
   font-size: 14.5px;
   line-height: 1.55;
-  color: var(--text-dim);
+  /* Was --text-dim. Raised so every row reads at the same weight and
+     the first one cannot look washed out against whatever sits behind
+     the boundary. It is the main body text on the card and was the
+     dimmest thing on it, which was backwards anyway. */
+  color: var(--text);
 }
 
 .card__providers {
@@ -694,11 +714,44 @@
    actions, and a second full-height row of buttons said they were.
    Small text row instead: same reach, a third of the space. */
 .controls--minorrow {
+  position: relative;
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  /* Room for the trailer control on the left without shifting the
+     centred pair off centre. */
+  min-height: 32px;
 }
+
+/* Absolutely placed so Seen it / Later stay exactly where they were.
+   Slightly smaller than the old floating version, which needed to be
+   readable over artwork; here it sits on the app background and can
+   afford to be quieter. */
+.ctl--trailer {
+  position: absolute;
+  left: 0;
+  min-height: 28px;
+  padding: 0 12px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--pop-yellow);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-hard-sm);
+}
+
+.ctl--trailer:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--line);
+}
+
+.ctl--trailer-on { background: var(--paper); }
 
 .ctl--minor {
   min-height: 30px;
