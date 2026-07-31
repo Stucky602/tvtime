@@ -1134,11 +1134,17 @@
   z-index: 0;
 }
 
+/* Lifts the poster above the blurred backdrop behind it.
+   ONLY the image and the no-artwork placeholder belong here. The
+   earlier version also listed .card__scrim, .card__scrollcue, and
+   .card__play, which each set `position: absolute` themselves -- and
+   because this rule comes later in the file it silently overrode them
+   to `relative`. The scrim then fell into normal flow and overflowed
+   onto the synopsis, and the trailer button dropped to the bottom of
+   the card where `overflow: hidden` clipped it in half. One rule, both
+   symptoms in the screenshots. */
 .card__art img,
-.card__noart,
-.card__scrim,
-.card__scrollcue,
-.card__play {
+.card__noart {
   position: relative;
   z-index: 1;
 }
