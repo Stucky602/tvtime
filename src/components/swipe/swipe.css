@@ -642,13 +642,14 @@
   background: #000;
 }
 
-/* Anchored to the CARD, not the scroller, and moved off centre. It
-   used to sit dead centre over the poster, which is both where the
-   artwork is and where a thumb lands mid-swipe. */
+/* Top left, mirroring the "More below" badge on the right.
+   Anchored to the CARD rather than the scroller, so it stays put while
+   the content moves under it. Bottom-left put it over the title block
+   and the commitment badge, which is what the screenshot showed. */
 .card__play {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
+  top: 10px;
+  left: 10px;
   z-index: 4;
   font-size: 15px;
   padding: 12px 20px;
@@ -661,10 +662,9 @@
 
 .card__play:active { transform: translate(2px, 2px); }
 
+/* Same corner as the Trailer button it replaces, so the pair reads as
+   one control toggling in place rather than two that move around. */
 .card__play--stop {
-  left: auto;
-  right: 12px;
-  bottom: 12px;
   font-size: 12px;
   padding: 8px 14px;
   background: var(--paper);
