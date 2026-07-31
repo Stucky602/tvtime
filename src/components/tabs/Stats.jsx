@@ -6,6 +6,8 @@ import {
   termContribution, predictionAccuracy,
 } from '../../lib/calibration.js';
 import { fetchMyPredictions } from '../../lib/predictions.js';
+import { guessTally, recentResults, SAID } from '../../lib/guess-score.js';
+import { fetchTitlesByKeys } from '../../lib/tabs.js';
 
 // Feature 5: two halves on one screen.
 //
@@ -18,6 +20,7 @@ export default function Stats({ room, user, partner, onClose }) {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
   const [calib, setCalib] = useState(null);
+  const [guesses, setGuesses] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -49,6 +52,12 @@ export default function Stats({ room, user, partner, onClose }) {
           .select('tmdb_id,media_type,verdict')
           .eq('user_id', user.id);
         const preds = await fetchMyPredictions(room.id).catch(() => []);
+        // Titles for the guess log, so it can say what the card was
+        // rather than just whether you were right.
+        const guessTitles = await fetchTitlesByKeys(
+          preds.map((x) => `${x.tmdb_id}:${x.media_type}`)
+        ).catch(() => new Map());
+        setGuesses({ tally: guessTally(preds), recent: recentResults(preds, guessTitles) });
 
         setCalib({
           buckets: cal,
@@ -191,6 +200,47 @@ export default function Stats({ room, user, partner, onClose }) {
           </p>
         )}
       </section>
+
+      {guesses && guesses.tally.total > 0 && (
+        <section className="settings__group">
+          <h2>Guessing {partner?.display_name || 'them'}</h2>
+
+          <div className="stat-grid">
+            <div className="stat-box">
+              <span className={`stat-num shout ${guesses.tally.score >= 0 ? '' : 'stat-num--down'}`}>
+                {guesses.tally.score >= 0 ? `+${guesses.tally.score}` : guesses.tally.score}
+              </span>
+              <span className="stat-label">Score</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-num shout">
+                {guesses.tally.rate === null ? '--' : `${Math.round(guesses.tally.rate * 100)}%`}
+              </span>
+              <span className="stat-label">Called right</span>
+            </div>
+          </div>
+
+          <p className="settings__hint">
+            {guesses.tally.correct} right, {guesses.tally.wrong} wrong
+            {guesses.tally.pending > 0 && `, ${guesses.tally.pending} still waiting on them`}.
+            {!guesses.tally.confident && ' Early days.'}
+          </p>
+
+          <ul className="guesslog">
+            {guesses.recent.map((g) => (
+              <li key={g.id} className={g.correct ? 'guesslog--hit' : 'guesslog--miss'}>
+                <span className="guesslog__mark shout">{g.correct ? '+1' : '-1'}</span>
+                <span className="guesslog__body">
+                  <span className="guesslog__title">{g.title}</span>
+                  <span className="guesslog__detail">
+                    You said {SAID[g.guess]} · They said {SAID[g.actual]}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {calib && (
         <section className="settings__group">

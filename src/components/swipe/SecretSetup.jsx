@@ -68,6 +68,11 @@ export default function SecretSetup({ onDone, onCancel }) {
         It lives on this phone and nowhere else. We never send it anywhere, and
         there is no way to recover it, which is rather the point.
       </p>
+      <p className="settings__hint">
+        You will need to do the pattern again each time you open the app. That
+        is deliberate: nothing stays unlocked, so picking up the phone is not
+        the same as being let in.
+      </p>
 
       <div className="secret-grid" onClick={tap}>
         {Array.from({ length: GRID * GRID }).map((_, i) => (

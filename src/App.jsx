@@ -9,7 +9,6 @@ import Recap from './components/tabs/Recap.jsx';
 import RateQueue from './components/tabs/RateQueue.jsx';
 import SecretScreen from './components/tabs/SecretScreen.jsx';
 import SecretSetup from './components/swipe/SecretSetup.jsx';
-import { hasSecret } from './lib/secret-gesture.js';
 import TitleSearch from './components/tabs/TitleSearch.jsx';
 import { fetchTogether } from './lib/tabs.js';
 import { TogetherTab, SoloTab, PendingTab, WatchedTab } from './components/tabs/TabPages.jsx';
@@ -263,10 +262,14 @@ export default function App() {
           onOpenStats={() => setOverlay('stats')}
           onOpenRecap={() => setOverlay('recap')}
           onOpenRate={() => setOverlay('rate')}
+          pulse={pulse}
           onOpenSecret={() => setOverlay('secret')}
-          // Seven taps on the counter. If a pattern already exists this
-          // opens the lists rather than making you set it up twice.
-          onKnockComplete={() => setOverlay(hasSecret() ? 'secret' : 'secret-setup')}
+          // The hold is the SETUP door, never the lists door. It used to
+          // open the lists directly whenever a pattern existed, which
+          // was a second way in that skipped the gesture entirely --
+          // hold the counter, read the private picks. Now setup is all
+          // it reaches, and setup shows nothing private.
+          onKnockComplete={() => setOverlay('secret-setup')}
           onOpenSearch={() => setOverlay('search')}
           presentPartners={present}
           liveConnection={live}

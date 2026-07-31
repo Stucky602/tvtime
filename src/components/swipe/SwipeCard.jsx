@@ -1,24 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { posterUrl, adaptivePosterSize, backdropUrl } from '../../lib/config.js';
 import { watchTarget, trailerEmbedUrl } from '../../lib/links.js';
+import { commitmentLabel } from '../../lib/lifecycle.js';
 
-// FlixPix card.
+// One card.
 //
-// LAYOUT (rewritten this round). The previous version split the card
-// into a flexed poster area plus a capped meta panel, which squashed the
-// poster: real posters are 2:3, the available space was not, and
-// object-fit: cover cropped the difference away.
+// LAYOUT, rewritten after a screenshot showed three problems that all
+// had the same cause: the Trailer button and the "scroll for details"
+// badge were positioned absolutely INSIDE the scroll container. So they
+// scrolled with the content, drifted over the synopsis, and sat on top
+// of the provider row and the watch button.
 //
-// Now the poster keeps its true 2:3 aspect ratio and fills the card,
-// and the details live BELOW it in the same scrollable column. You
-// scroll down to read them. That is only safe because of the axis lock
-// in lib/gesture.js -- a vertical drag is classified as vertical and
-// goes inert, so native scrolling and horizontal swiping no longer
-// compete for the same touch. This layout would have been unusable
-// before that fix.
+// Anything that floats over the card is now a sibling of the scroller,
+// not a descendant. It is anchored to the card and stays put while the
+// content moves underneath, which is what "floating" is supposed to
+// mean.
 //
-// The bottom strip of the poster carries a gradient scrim with the
-// title on it, so you can identify the card without scrolling at all.
+// The scroll hint is also measured rather than assumed. It used to
+// render unconditionally, so it promised details on cards that had
+// none.
 
 export default function SwipeCard({
   title,
@@ -30,10 +30,35 @@ export default function SwipeCard({
 }) {
   const [posterFailed, setPosterFailed] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [canScroll, setCanScroll] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const scrollRef = useRef(null);
+
   const poster = posterUrl(title.poster_path, adaptivePosterSize());
   const backdrop = backdropUrl(title.backdrop_path);
   const trailer = trailerEmbedUrl(title.trailer_key);
   const watch = watchTarget(title, roomPlatforms);
+
+  // Measure real overflow rather than promising details that may not
+  // exist. Runs after layout and again if the image finishes loading
+  // and changes the height.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const measure = () => setCanScroll(el.scrollHeight > el.clientHeight + 8);
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [title.tmdb_id, title.media_type, playing]);
+
+  // Reset per card.
+  useEffect(() => {
+    setScrolled(false);
+    setPlaying(false);
+    setPosterFailed(false);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [title.tmdb_id, title.media_type]);
 
   const rotation = Math.max(-12, Math.min(12, dx / 14));
   const verdict = dx > 40 ? 'yes' : dx < -40 ? 'no' : null;
@@ -52,16 +77,16 @@ export default function SwipeCard({
   const year = title.year || null;
   const runtime = title.runtime ? `${title.runtime} min` : null;
   const rating = title.vote_count >= 100 && title.rating ? title.rating.toFixed(1) : null;
+  const commitment = commitmentLabel(title);
 
   return (
     <article className={`card ${isNext ? 'card--next' : ''}`} style={style} aria-hidden={isNext}>
-      {/* The scroll container. touch-action: pan-y lets the browser own
-          vertical scrolling here while the deck owns horizontal swipes. */}
-      <div className="card__scroll">
+      <div
+        className="card__scroll"
+        ref={scrollRef}
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 12)}
+      >
         <div className="card__art">
-          {/* Fills the space either side of a 2:3 poster with a still
-              from the film. Previously flat dark, and the image was
-              already in the database. */}
           {backdrop && !playing && (
             <div
               className="card__backdrop"
@@ -69,6 +94,7 @@ export default function SwipeCard({
               aria-hidden="true"
             />
           )}
+
           {playing && trailer ? (
             <iframe
               className="card__trailer"
@@ -96,55 +122,24 @@ export default function SwipeCard({
             </div>
           )}
 
-          {/* Title burned onto the poster so the card is identifiable
-              without scrolling. */}
-          <div className="card__scrim">
-            <h2 className="card__title shout inked-text">{title.title}</h2>
-            <p className="card__facts">
-              {[
-                title.media_type === 'tv' ? 'Series' : 'Film',
-                year,
-                runtime,
-                rating ? `${rating}/10` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          </div>
-
-          {!isNext && !playing && trailer && (
-            <button
-              className="card__play shout"
-              // Stop the tap being read as the start of a drag.
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlaying(true);
-              }}
-              aria-label={`Play ${title.title} trailer`}
-            >
-              ▶ Trailer
-            </button>
-          )}
-
-          {!isNext && playing && (
-            <button
-              className="card__play card__play--stop shout"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlaying(false);
-              }}
-              aria-label="Close trailer"
-            >
-              ✕ Close
-            </button>
-          )}
-
-          {!isNext && !playing && (
-            <span className="card__scrollcue" aria-hidden="true">
-              Scroll for details
-            </span>
+          {/* Title burned onto the poster. Scrolls WITH the art on
+              purpose -- it belongs to the image, unlike the floating
+              controls below. */}
+          {!playing && (
+            <div className="card__scrim">
+              <h2 className="card__title shout inked-text">{title.title}</h2>
+              <p className="card__facts">
+                {[
+                  title.media_type === 'tv' ? 'Series' : 'Film',
+                  year,
+                  runtime,
+                  rating ? `${rating}/10` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+              {commitment && <p className="card__commit">{commitment}</p>}
+            </div>
           )}
         </div>
 
@@ -175,8 +170,47 @@ export default function SwipeCard({
         </div>
       </div>
 
-      {/* Verdict overlays sit OUTSIDE the scroller so they stay put
-          while the card content scrolls under them. */}
+      {/* ---- Floating layer: siblings of the scroller, not children ----
+          These stay anchored to the card while the content moves. When
+          they lived inside .card__scroll they drifted down over the
+          synopsis and the watch button, which is what the screenshot
+          showed. */}
+      {!isNext && trailer && !playing && (
+        <button
+          className="card__play shout"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setPlaying(true);
+          }}
+          aria-label={`Play ${title.title} trailer`}
+        >
+          ▶ Trailer
+        </button>
+      )}
+
+      {!isNext && playing && (
+        <button
+          className="card__play card__play--stop shout"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setPlaying(false);
+          }}
+          aria-label="Close trailer"
+        >
+          ✕ Close
+        </button>
+      )}
+
+      {/* Only when there is genuinely something below the fold, and only
+          until you have gone looking. */}
+      {!isNext && canScroll && !scrolled && !playing && (
+        <span className="card__scrollcue" aria-hidden="true">
+          More below
+        </span>
+      )}
+
       {!isNext && (
         <>
           <div className="card__leak card__leak--yes" style={{ opacity: dx > 0 ? leak : 0 }} />

@@ -163,6 +163,7 @@
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 2;
   padding: 44px 14px 14px;
   background: linear-gradient(to top, rgba(16, 17, 26, 0.96) 42%, transparent);
 }
@@ -174,6 +175,20 @@
   color: var(--text);
 }
 
+.card__commit {
+  margin: 4px 0 0;
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--line);
+  background: var(--pop-cyan);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 3px;
+}
+
 .card__facts {
   margin: 0;
   font-size: 12.5px;
@@ -183,10 +198,14 @@
   color: var(--pop-yellow);
 }
 
+/* Only rendered when there is real overflow (measured in the
+   component), and only until you scroll. Top-right, out of the way of
+   both the trailer button and the title. */
 .card__scrollcue {
   position: absolute;
   right: 10px;
   top: 10px;
+  z-index: 4;
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -623,12 +642,14 @@
   background: #000;
 }
 
+/* Anchored to the CARD, not the scroller, and moved off centre. It
+   used to sit dead centre over the poster, which is both where the
+   artwork is and where a thumb lands mid-swipe. */
 .card__play {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) rotate(-2deg);
-  z-index: 3;
+  left: 12px;
+  bottom: 12px;
+  z-index: 4;
   font-size: 15px;
   padding: 12px 20px;
   color: var(--line);
@@ -638,16 +659,12 @@
   box-shadow: var(--shadow-hard-sm);
 }
 
-.card__play:active {
-  transform: translate(-50%, -50%) rotate(-2deg) scale(0.96);
-}
+.card__play:active { transform: translate(2px, 2px); }
 
 .card__play--stop {
-  top: auto;
-  bottom: 12px;
   left: auto;
   right: 12px;
-  transform: none;
+  bottom: 12px;
   font-size: 12px;
   padding: 8px 14px;
   background: var(--paper);
@@ -1219,4 +1236,41 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- Guess result ---- */
+
+.scorepop {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 14px 0;
+  padding: 8px 12px;
+  border: var(--ink-w) solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-hard-sm);
+  animation: scorepop-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scorepop--up { background: #6ee7a8; }
+.scorepop--down { background: var(--no); }
+
+.scorepop__num {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--line);
+}
+
+.scorepop__label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--line);
+}
+
+@keyframes scorepop-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.94); }
+  to { opacity: 1; transform: none; }
 }

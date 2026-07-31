@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { posterUrl } from '../../lib/config.js';
-import { fetchSecretVotes, fetchSecretTitles, partitionSecret } from '../../lib/secret.js';
+import { fetchSecretLists, fetchSecretTitles } from '../../lib/secret.js';
 import { forgetSecret } from '../../lib/secret-gesture.js';
 
 // The secret lists.
@@ -24,11 +24,11 @@ export default function SecretScreen({ user, partner, onClose, onReset }) {
   useEffect(() => {
     (async () => {
       try {
-        const votes = await fetchSecretVotes();
-        const p = partitionSecret(votes, user.id, partner?.id ?? null);
-        const titles = await fetchSecretTitles([
-          ...p.ours, ...p.waitingOnThem, ...p.myAlone, ...p.theirAlone,
-        ]);
+        // Server-side now. The client is no longer permitted to read a
+        // partner's secret votes at all, so it cannot compute the
+        // mutual set itself -- which is the point.
+        const p = await fetchSecretLists();
+        const titles = await fetchSecretTitles([...p.ours, ...p.claimed, ...p.alone]);
         setState({ p, titles });
       } catch (err) {
         setError(err.message || 'Could not load.');
@@ -104,23 +104,18 @@ export default function SecretScreen({ user, partner, onClose, onReset }) {
         <p className="settings__hint">
           Marked "only with you". Nothing has come back on them yet.
         </p>
-        <List keys={p.waitingOnThem} empty="Nothing waiting." />
+        <List keys={p.claimed} empty="Nothing waiting." />
       </section>
 
       <section className="settings__group">
         <h2>Yours alone</h2>
-        <List keys={p.myAlone} empty="You haven't claimed anything for yourself." />
+        <List keys={p.alone} empty="You haven't claimed anything for yourself." />
       </section>
 
-      {partner && (
-        <section className="settings__group">
-          <h2>{partner.display_name}'s alone</h2>
-          <p className="settings__hint">
-            Theirs to watch without you. Consider it a heads-up, not an invitation.
-          </p>
-          <List keys={p.theirAlone} empty="Nothing." />
-        </section>
-      )}
+      {/* There used to be a "<partner>'s alone" section here, listing
+          their private picks. That defeated the entire purpose of a
+          secret gesture and has been removed -- and the database will
+          no longer serve that data even if something asks for it. */}
 
       <section className="settings__group settings__danger">
         <h2>Forget the pattern</h2>

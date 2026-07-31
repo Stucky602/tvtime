@@ -28,6 +28,23 @@ export const SECRET_BLURB = {
  * already scopes swipe reads to room members, so this inherits exactly
  * the right boundary with no extra policy.
  */
+/**
+ * The three lists, computed server-side.
+ *
+ * Replaces reading `swipes` directly, which no longer works and should
+ * not: RLS now hides a partner's secret votes entirely, so the mutual
+ * set cannot be computed on the client. That is the correct shape --
+ * the intersection is the only thing either person is entitled to, and
+ * an unmatched claim never leaves the database.
+ */
+export async function fetchSecretLists() {
+  const { data, error } = await supabase.rpc('my_secret_lists');
+  if (error) throw error;
+  if (!data || data.status !== 'OK') return { ours: [], claimed: [], alone: [] };
+  const keys = (arr) => (arr || []).map((r) => `${r.tmdb_id}:${r.media_type}`);
+  return { ours: keys(data.ours), claimed: keys(data.claimed), alone: keys(data.alone) };
+}
+
 export async function fetchSecretVotes() {
   const { data, error } = await supabase
     .from('swipes')

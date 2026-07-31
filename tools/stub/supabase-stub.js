@@ -6,7 +6,7 @@ const TITLES = Array.from({ length: 12 }, (_, i) => ({
   rating: 7, vote_count: 500, popularity: 50, genres: [3], providers: ['netflix'],
   is_reality: false, original_language: 'en', keyword_ids: [], cast_ids: [],
   cast_names: [], director_ids: [], director_names: [],
-  episode_count: null, season_count: null, excluded: false,
+  episode_count: null, season_count: null, excluded: false, trailer_key: 'dQw4w9WgXcQ',
 }));
 const ok = (data = []) => Promise.resolve({ data, error: null });
 const chain = (table) => {
@@ -24,6 +24,12 @@ const chain = (table) => {
   return c;
 };
 export const supabase = {
+  rpc: (name) => {
+    if (name === 'my_secret_lists') {
+      return Promise.resolve({ data: { status: 'OK', ours: [], claimed: [], alone: [] }, error: null });
+    }
+    return Promise.resolve({ data: { status: 'OK' }, error: null });
+  },
   from: (t) => chain(t),
   auth: {
     getUser: () => Promise.resolve({ data: { user: { id: 'me' } } }),

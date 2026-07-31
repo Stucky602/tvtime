@@ -107,6 +107,33 @@ export function forgetSecret() {
   }
 }
 
+// ---------------------------------------------------------------------
+// Session unlock, deliberately NOT persisted
+// ---------------------------------------------------------------------
+//
+// The pattern is remembered; being unlocked is not. Every app load
+// starts locked, so the only way to the private lists is to perform the
+// gesture again, right then.
+//
+// This is a module-level variable on purpose. localStorage or
+// sessionStorage would both survive a reload and hand the next person
+// who picks up the phone a shortcut, which is exactly the failure this
+// exists to prevent. A plain variable dies with the page, which is the
+// lifetime that matches "this session".
+let unlockedThisSession = false;
+
+export function isUnlocked() {
+  return unlockedThisSession;
+}
+
+export function unlockSession() {
+  unlockedThisSession = true;
+}
+
+export function lockSession() {
+  unlockedThisSession = false;
+}
+
 /** Has this person set up the secret at all? Drives whether tabs show. */
 export function hasSecret() {
   return loadSecret() !== null;

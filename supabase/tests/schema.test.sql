@@ -736,3 +736,100 @@ begin
   end if;
   raise notice 'PASS: each person holds their own verdict on the same title';
 end $$;
+
+-- =====================================================================
+-- Secret votes must be private to their author.
+--
+-- The bug this covers was found by a partner installing the app and
+-- reading the other's picks. The UI leak was fixable in a component;
+-- this asserts the data itself is not readable, so no future screen can
+-- reintroduce it by querying swipes without thinking.
+-- =====================================================================
+
+do $$
+declare
+  v_code text;
+  v_a uuid := 'ff000000-0000-0000-0000-00000000ca01';
+  v_b uuid := 'ff000000-0000-0000-0000-00000000ca02';
+  v_res jsonb;
+  v_n int;
+begin
+  insert into auth.users (id) values (v_a), (v_b);
+  insert into titles (tmdb_id, media_type, title) values
+    (700800, 'movie', 'Mutual'), (700801, 'movie', 'A Alone'), (700802, 'movie', 'B Alone')
+    on conflict do nothing;
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select (create_room('A', array['netflix'], '9182') -> 'room' ->> 'code') into v_code;
+
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform join_room(v_code, '9182', 'B');
+
+  -- A claims one privately, and marks one for themselves alone.
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  perform submit_swipe(700800, 'movie', 'only_with_you');
+  perform submit_swipe(700801, 'movie', 'just_me');
+
+  -- B marks a different one alone, and has not touched 700800 yet.
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform submit_swipe(700802, 'movie', 'just_me');
+
+  -- Before B reciprocates, A must see NOTHING of B's, and B nothing of A's.
+  select my_secret_lists() into v_res;
+  if jsonb_array_length(v_res -> 'ours') <> 0 then
+    raise exception 'FAIL: a one-sided claim showed as mutual';
+  end if;
+  if (v_res::text) like '%700801%' then
+    raise exception 'FAIL: B can see A''s private just_me pick';
+  end if;
+  raise notice 'PASS: a partner''s private picks are absent from the payload';
+
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select my_secret_lists() into v_res;
+  if (v_res::text) like '%700802%' then
+    raise exception 'FAIL: A can see B''s private just_me pick';
+  end if;
+  if jsonb_array_length(v_res -> 'claimed') <> 1 then
+    raise exception 'FAIL: A should see their own unanswered claim';
+  end if;
+  if jsonb_array_length(v_res -> 'alone') <> 1 then
+    raise exception 'FAIL: A should see their own alone pick';
+  end if;
+  raise notice 'PASS: you see your own claims and your own alone list';
+
+  -- Once B reciprocates, and only then, it becomes mutual for both.
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform submit_swipe(700800, 'movie', 'only_with_you');
+
+  select my_secret_lists() into v_res;
+  if jsonb_array_length(v_res -> 'ours') <> 1 then
+    raise exception 'FAIL: B should now see the mutual title';
+  end if;
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select my_secret_lists() into v_res;
+  if jsonb_array_length(v_res -> 'ours') <> 1 then
+    raise exception 'FAIL: A should now see the mutual title';
+  end if;
+  raise notice 'PASS: a title becomes visible to both only when both have claimed it';
+
+  -- And the raw table must not hand them over either. Ordinary votes
+  -- still cross between members; secret ones must not.
+  perform set_config('request.jwt.claim.sub', v_b::text, true);
+  perform submit_swipe(700801, 'movie', 'right');
+  perform set_config('request.jwt.claim.sub', v_a::text, true);
+  select count(*) into v_n
+  from swipes
+  where user_id = v_b and direction in ('only_with_you', 'just_me');
+  raise notice 'NOTE: superuser harness bypasses RLS, so the policy predicate is asserted rather than enforced here (% rows)', v_n;
+
+  -- Assert the policy TEXT contains the restriction, which is the part
+  -- the harness cannot exercise directly.
+  if not exists (
+    select 1 from pg_policies
+    where tablename = 'swipes' and policyname = 'swipes_select_room'
+      and qual like '%only_with_you%'
+  ) then
+    raise exception 'FAIL: the swipes select policy does not exclude secret directions';
+  end if;
+  raise notice 'PASS: the select policy excludes secret directions for room-mates';
+end $$;

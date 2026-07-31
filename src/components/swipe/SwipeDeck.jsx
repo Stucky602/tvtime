@@ -6,7 +6,7 @@ import { hapticThreshold, hapticCommit, hapticUndo, hapticMatch } from '../../li
 import { lockAxis, dragState, shouldCommit, commitDistance, swipeDirection } from '../../lib/gesture.js';
 import SecretPanel from './SecretPanel.jsx';
 import { guess } from '../../lib/predictions.js';
-import { loadSecret, zoneFor, sequencesMatch, pruneTaps } from '../../lib/secret-gesture.js';
+import { loadSecret, zoneFor, sequencesMatch, pruneTaps, unlockSession } from '../../lib/secret-gesture.js';
 
 // Architecture ref: ARCHITECTURE_v1.0.md §6 (whole section), §5.3, §9
 //
@@ -72,7 +72,7 @@ const VELOCITY_WINDOW_MS = 80;
 // cannot happen by accident, short enough to be worth doing.
 const HOLD_SECONDS = 5;
 
-export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret, askGuess, roomId, userId, partnerName, pendingSync = 0 }) {
+export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUndone, onExhausted, devMode, roomPlatforms = [], resetKey, onKnock, secretUnlocked, onOpenSecret, askGuess, roomId, userId, partnerName, pendingSync = 0, onUnlocked }) {
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ dx: 0, dy: 0, active: false });
   const [leaving, setLeaving] = useState(null);
@@ -374,6 +374,10 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
     if (sequencesMatch(tail, secret.sequence)) {
       secretTaps.current = [];
       hapticMatch();
+      // Unlocks the private lists for THIS page load only. Reload the
+      // app and the gesture is required again.
+      unlockSession();
+      onUnlocked?.();
       setSecretOpen(true);
     }
   };

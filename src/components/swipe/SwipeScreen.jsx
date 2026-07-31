@@ -15,13 +15,14 @@ import { partnerActivity } from '../../lib/tabs.js';
 import MoreMenu from './MoreMenu.jsx';
 import { findIntent, filterByCommitment } from '../../lib/intent.js';
 import { commitmentHours } from '../../lib/lifecycle.js';
-import { hasSecret } from '../../lib/secret-gesture.js';
+import { isUnlocked } from '../../lib/secret-gesture.js';
 
 import TonightBanner from './TonightBanner.jsx';
 import { fetchPlans } from '../../lib/plans.js';
 import { tonightPlan } from '../../lib/plans-pure.js';
 import { fetchTitlesByKeys } from '../../lib/tabs.js';
 import { fetchMyPredictions } from '../../lib/predictions.js';
+import { unseenResults, markResultsSeen } from '../../lib/guess-score.js';
 import { updateSessionPresets } from '../../lib/room.js';
 import { CONFIG } from '../../lib/config.js';
 import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
@@ -31,7 +32,7 @@ import { EMPTY_FILTERS as EMPTY, hasActiveFilters } from '../../lib/filters.js';
 
 const EMPTY_FILTERS = EMPTY;
 
-export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, onOpenRate, onOpenSecret, onKnockComplete, presentPartners = [], liveConnection = false }) {
+export default function SwipeScreen({ room, user, partner, devMode, onOpenSettings, onOpenStats, onOpenSearch, onOpenRecap, onOpenRate, onOpenSecret, onKnockComplete, pulse = 0, presentPartners = [], liveConnection = false }) {
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -46,6 +47,8 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
   const [planTitle, setPlanTitle] = useState(null);
   const [planTick, setPlanTick] = useState(0);
   const [myPredictions, setMyPredictions] = useState([]);
+  const [scorePop, setScorePop] = useState(null);
+  const [secretUnlocked, setSecretUnlocked] = useState(() => isUnlocked());
 
   // Captured ONCE per mount. Cards swiped in previous visits to this tab
   // are filtered out here so the deck resumes where it left off; cards
@@ -100,8 +103,25 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
 
   useEffect(() => {
     if (!partner?.id) return;
-    fetchMyPredictions(room.id).then(setMyPredictions).catch(() => {});
-  }, [room.id, partner?.id]);
+    fetchMyPredictions(room.id)
+      .then((rows) => {
+        setMyPredictions(rows);
+
+        // A guess resolves whenever your partner gets to that card,
+        // which may be days after you made it. So the +1 appears when
+        // the result becomes KNOWN rather than when you guessed --
+        // there is no earlier moment at which it could.
+        const fresh = unseenResults(rows);
+        if (fresh.length === 0) return;
+        const net = fresh.reduce((n, p) => n + (p.was_correct ? 1 : -1), 0);
+        markResultsSeen(fresh.map((p) => p.id));
+        setScorePop({ net, n: fresh.length });
+        setTimeout(() => setScorePop(null), 3200);
+      })
+      .catch(() => {});
+    // pulse is included so a result landing while you are on this screen
+    // shows immediately rather than on next open.
+  }, [room.id, partner?.id, pulse]);
 
   // The plan, if there is one. Re-read on the realtime pulse too, so a
   // plan your partner makes appears without you refreshing.
@@ -224,6 +244,24 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
           the room code for re-sharing. It was specified and never built
           -- until now the first user got a normal-looking app with no
           hint that nothing would ever match. */}
+      {scorePop && (
+        <div
+          className={`scorepop ${scorePop.net >= 0 ? 'scorepop--up' : 'scorepop--down'}`}
+          role="status"
+        >
+          <span className="scorepop__num shout">
+            {scorePop.net >= 0 ? `+${scorePop.net}` : scorePop.net}
+          </span>
+          <span className="scorepop__label">
+            {scorePop.n === 1
+              ? scorePop.net > 0
+                ? 'You called it'
+                : 'Got that one wrong'
+              : `${scorePop.n} guesses settled`}
+          </span>
+        </div>
+      )}
+
       <TonightBanner
         plan={plan}
         title={planTitle}
@@ -280,11 +318,20 @@ export default function SwipeScreen({ room, user, partner, devMode, onOpenSettin
             const key = `${card.tmdb_id}:${card.media_type}`;
             if (deck?.partnerVotedKeys?.has?.(key)) return false;
             if (myPredictions.some((p) => `${p.tmdb_id}:${p.media_type}` === key)) return false;
-            return card.tmdb_id % 6 === 0;
+            // Halved from every 6th card. It was fun and too frequent,
+            // which is the fastest way to turn a nice surprise into
+            // something you tap past without reading.
+            return card.tmdb_id % 12 === 0;
           }}
           pendingSync={pendingSync}
           resetKey={JSON.stringify(filters)}
-          secretUnlocked={hasSecret()}
+          // Was hasSecret(), which reads localStorage and therefore
+          // survived every reload -- so once a pattern existed, the
+          // shortcut to the private lists sat on screen permanently for
+          // whoever was holding the phone. Now it tracks the session
+          // unlock, which resets on every load.
+          secretUnlocked={secretUnlocked}
+          onUnlocked={() => setSecretUnlocked(true)}
           onOpenSecret={onOpenSecret}
           onKnock={() => onKnockComplete?.()}
           onCardResolved={(t) => addSwipedKey(room.id, user.id, `${t.tmdb_id}:${t.media_type}`)}

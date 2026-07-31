@@ -692,3 +692,59 @@
   background: var(--pop-yellow);
   color: var(--line);
 }
+
+/* ---- Guess log ---- */
+
+.stat-num--down { color: var(--pop-red); }
+
+.guesslog {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guesslog li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--panel-2);
+  border: var(--ink-w-sm) solid var(--line);
+  border-radius: 6px;
+}
+
+.guesslog--hit { border-left: 5px solid #6ee7a8; }
+.guesslog--miss { border-left: 5px solid var(--pop-red); }
+
+.guesslog__mark {
+  flex-shrink: 0;
+  font-size: 15px;
+  min-width: 28px;
+}
+
+.guesslog--hit .guesslog__mark { color: #6ee7a8; }
+.guesslog--miss .guesslog__mark { color: var(--pop-red); }
+
+.guesslog__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.guesslog__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.guesslog__detail {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}

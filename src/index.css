@@ -75,7 +75,13 @@
 html,
 body,
 #root {
+  /* dvh, not %. On iOS a percentage height resolves against a viewport
+     that does not account for the dynamic browser chrome, which left a
+     band of dead space below the tab bar. dvh tracks the viewport as it
+     actually is. The % is kept first as a fallback for anything that
+     does not support dvh. */
   height: 100%;
+  height: 100dvh;
   /* THE FIX for "swiping just drags the whole screen".
      The card is moved with transform: translateX(), so a dragged card
      extends past the right edge of the viewport. That made the PAGE
@@ -115,7 +121,9 @@ body {
   height: 100%;
   overflow-x: clip;
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  /* No bottom inset here. The tab bar already applies it, and applying
+     it in both places inset the layout twice and pushed everything up
+     off the bottom of the screen. */
 }
 
 /* Focus has to survive on top of black outlines, so it's a bright
