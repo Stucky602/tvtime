@@ -27,9 +27,12 @@ export default function SwipeCard({
   dragging = false,
   isNext = false,
   roomPlatforms = [],
+  // Owned by SwipeDeck now. The Trailer control lives down in the
+  // button row rather than on the artwork, so the state has to live
+  // somewhere both can see.
+  playing = false,
 }) {
   const [posterFailed, setPosterFailed] = useState(false);
-  const [playing, setPlaying] = useState(false);
   const [canScroll, setCanScroll] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const scrollRef = useRef(null);
@@ -55,7 +58,6 @@ export default function SwipeCard({
   // Reset per card.
   useEffect(() => {
     setScrolled(false);
-    setPlaying(false);
     setPosterFailed(false);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [title.tmdb_id, title.media_type]);
@@ -175,33 +177,10 @@ export default function SwipeCard({
           they lived inside .card__scroll they drifted down over the
           synopsis and the watch button, which is what the screenshot
           showed. */}
-      {!isNext && trailer && !playing && (
-        <button
-          className="card__play shout"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            setPlaying(true);
-          }}
-          aria-label={`Play ${title.title} trailer`}
-        >
-          ▶ Trailer
-        </button>
-      )}
-
-      {!isNext && playing && (
-        <button
-          className="card__play card__play--stop shout"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            setPlaying(false);
-          }}
-          aria-label="Close trailer"
-        >
-          ✕ Close
-        </button>
-      )}
+      {/* The Trailer control used to float here, over the poster. It
+          now sits in the button row below the card (see SwipeDeck),
+          where it is permanently visible without covering artwork and
+          without needing to hide itself on scroll. */}
 
       {/* Only when there is genuinely something below the fold, and only
           until you have gone looking. */}

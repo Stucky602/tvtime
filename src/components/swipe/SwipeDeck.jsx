@@ -79,7 +79,6 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   const [match, setMatch] = useState(false);
   const [undoable, setUndoable] = useState(null);
   const [queuedNotice, setQueuedNotice] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   // Coach mark for the two non-obvious outcomes. Shown once ever --
   // "Seen it" and "Later" fix a real modelling problem (see the
   // seen/snooze migration) but only if people know they exist, and a
@@ -109,6 +108,11 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
   // swiping into a quiz, which is a good way to kill the thing people
   // like about swiping.
   const [guessed, setGuessed] = useState(null);
+  // Trailer playback lives here rather than in the card, because the
+  // control that toggles it now sits in the button row outside the
+  // card. Reset whenever the card changes, or the next title would open
+  // already playing the previous one's trailer.
+  const [playing, setPlaying] = useState(false);
   const secretTaps = useRef([]);
   const draggedThisGesture = useRef(false);
   const stackRef = useRef(null);
@@ -161,13 +165,7 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
 
   useEffect(() => {
     setGuessed(null);
-  }, [index]);
-
-  // Collapse an expanded synopsis whenever the card changes -- carrying
-  // the expanded state onto the next title would hide its poster for no
-  // reason.
-  useEffect(() => {
-    setExpanded(false);
+    setPlaying(false);
   }, [index]);
 
   // Warm the next couple of posters so swiping doesn't flash blank.
@@ -478,8 +476,13 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
             dx={dx}
             dy={leaving ? 0 : drag.dy}
             dragging={drag.active}
-            expanded={expanded}
-            onToggleExpand={() => setExpanded((v) => !v)}
+            playing={playing}
+            /* roomPlatforms was missing here entirely, so the watch
+               button could not prefer a service this room actually
+               subscribes to and fell through to whichever came first.
+               `expanded` and `onToggleExpand` were left over from the
+               old expand-the-synopsis card and no longer exist. */
+            roomPlatforms={roomPlatforms}
           />
         </div>
 
@@ -579,6 +582,18 @@ export default function SwipeDeck({ cards, debugByKey, onCardResolved, onCardUnd
       {/* Distinct from a pass: neither of these is a taste signal, and
           treating them as one was corrupting the recommender. */}
       <div className="controls controls--minorrow">
+        {/* Left-anchored in the gap beside Seen it / Later. Outside the
+            card, so it is permanently visible, never covers the poster,
+            and does not need to hide itself on scroll. */}
+        {current.trailer_key && (
+          <button
+            className={`ctl--trailer ${playing ? 'ctl--trailer-on' : ''}`}
+            onClick={() => setPlaying((v) => !v)}
+            aria-label={playing ? 'Close trailer' : `Play ${current.title} trailer`}
+          >
+            {playing ? '✕ Close' : '▶ Trailer'}
+          </button>
+        )}
         <button
           className="ctl ctl--minor"
           onClick={() => commit('seen')}
